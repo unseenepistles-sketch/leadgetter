@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Lead System{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body class="h-full bg-slate-50 text-slate-800">
+  <header class="bg-white border-b border-slate-200">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-6">
+      <a href="/" class="font-semibold text-slate-900">📈 Lead System</a>
+      <nav class="flex gap-4 text-sm">
+        <a href="/" class="hover:text-indigo-600">Dashboard</a>
+        <a href="/creators" class="hover:text-indigo-600">Creators</a>
+        <a href="/outreach" class="hover:text-indigo-600">Outreach</a>
+        <a href="/campaigns" class="hover:text-indigo-600">Campaigns</a>
+        <a href="/l" class="hover:text-indigo-600">Landing page</a>
+      </nav>
+    </div>
+  </header>
+  <main class="max-w-6xl mx-auto px-4 py-6">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

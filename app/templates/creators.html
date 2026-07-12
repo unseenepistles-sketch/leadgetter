@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Creators · Lead System{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-xl font-semibold">Discovered creators</h1>
+  <a href="/" class="text-sm text-indigo-600">← Run a new discovery</a>
+</div>
+
+{% if creators %}
+<div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-50 text-left text-slate-500">
+      <tr>
+        <th class="px-4 py-2">Creator</th>
+        <th class="px-4 py-2">Platform</th>
+        <th class="px-4 py-2">Followers</th>
+        <th class="px-4 py-2">Engagement</th>
+        <th class="px-4 py-2">Niche</th>
+        <th class="px-4 py-2">Public contact</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in creators %}
+      <tr class="border-t border-slate-100">
+        <td class="px-4 py-2"><a href="{{ c.url }}" target="_blank" class="text-indigo-600 font-medium">{{ c.display_name or c.handle }}</a></td>
+        <td class="px-4 py-2 text-slate-500">{{ c.platform }}</td>
+        <td class="px-4 py-2">{{ "{:,}".format(c.followers) }}</td>
+        <td class="px-4 py-2 text-slate-500">{{ "{:,}".format(c.engagement_score|int) }}</td>
+        <td class="px-4 py-2 text-slate-500">{{ niches[c.niche_id].name if c.niche_id in niches else '—' }}</td>
+        <td class="px-4 py-2 text-slate-500">{{ c.public_contact or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-400">
+  No creators discovered yet. Go to the <a href="/" class="text-indigo-600">dashboard</a> and run a discovery.
+  <p class="text-xs mt-2">(Tip: set <code>YOUTUBE_API_KEY</code> for live results; without keys the run completes but finds none.)</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Outreach · Lead System{% endblock %}
+{% block content %}
+<div class="mb-4">
+  <h1 class="text-xl font-semibold">Partnership outreach</h1>
+  <p class="text-sm text-slate-500">Reach creators for shoutouts / affiliate / collab deals. Draft with AI, then send it yourself to their public business contact.</p>
+</div>
+
+<div class="grid md:grid-cols-5 gap-3">
+  {% for status in statuses %}
+  <div class="bg-slate-100 rounded-xl p-2">
+    <div class="text-xs font-semibold uppercase text-slate-500 px-2 py-1">{{ status.replace('_',' ') }} ({{ columns[status]|length }})</div>
+    <div class="space-y-2">
+      {% for t in columns[status] %}
+      {% set c = creators.get(t.creator_id) %}
+      <div class="bg-white rounded-lg border border-slate-200 p-3 text-sm">
+        {% if c %}
+        <a href="{{ c.url }}" target="_blank" class="font-medium text-indigo-600">{{ c.display_name or c.handle }}</a>
+        <div class="text-xs text-slate-400 mb-2">{{ c.platform }} · {{ "{:,}".format(c.followers) }} followers</div>
+        {% endif %}
+        {% if t.draft_message %}
+        <p class="text-xs text-slate-600 bg-slate-50 rounded p-2 mb-2 whitespace-pre-wrap">{{ t.draft_message }}</p>
+        {% endif %}
+        <div class="flex flex-wrap gap-1">
+          <form method="post" action="/outreach/{{ t.id }}/draft">
+            <button class="text-xs px-2 py-1 rounded bg-indigo-50 text-indigo-700 hover:bg-indigo-100">✍️ Draft</button>
+          </form>
+          <form method="post" action="/outreach/{{ t.id }}/status" class="flex gap-1">
+            <select name="status" class="text-xs rounded border border-slate-200 px-1">
+              {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if s==t.status }}>{{ s.replace('_',' ') }}</option>{% endfor %}
+            </select>
+            <button class="text-xs px-2 py-1 rounded bg-slate-100 hover:bg-slate-200">Move</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+      {% if not columns[status] %}<div class="text-xs text-slate-400 px-2 py-3">Empty</div>{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

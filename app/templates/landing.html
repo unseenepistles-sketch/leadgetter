@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ brand }} — {{ lead_magnet }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="h-full bg-gradient-to-b from-indigo-50 to-white">
+  <div class="max-w-md mx-auto px-6 py-16">
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+      <div class="text-sm font-medium text-indigo-600 mb-2">{{ brand }}</div>
+      <h1 class="text-2xl font-semibold text-slate-900 mb-2">Get {{ lead_magnet }}</h1>
+      <p class="text-slate-500 mb-6">Interested in {{ product }}? Pop in your email and I'll send {{ lead_magnet }} straight to your inbox.</p>
+
+      {% if error %}
+      <div class="mb-4 text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{{ error }}</div>
+      {% endif %}
+
+      <form method="post" action="/subscribe" class="space-y-3">
+        {% if niche_id %}<input type="hidden" name="niche_id" value="{{ niche_id }}" />{% endif %}
+        <input name="name" placeholder="First name (optional)"
+               class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+        <input name="email" type="email" required placeholder="you@email.com"
+               class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+        <label class="flex items-start gap-2 text-sm text-slate-600">
+          <input type="checkbox" name="consent" value="on" class="mt-1" required />
+          <span>Yes, email me {{ lead_magnet }} and occasional updates from {{ brand }}. I can unsubscribe anytime.</span>
+        </label>
+        <button class="w-full bg-indigo-600 text-white rounded-lg px-4 py-2.5 font-medium hover:bg-indigo-700">
+          Send me {{ lead_magnet }}
+        </button>
+      </form>
+      <p class="text-xs text-slate-400 mt-4">We only email people who opt in, and every email has a one-click unsubscribe.</p>
+    </div>
+  </div>
+</body>
+</html>

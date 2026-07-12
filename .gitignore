@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.db
+*.sqlite3
+.env
+service-account*.json
+*.log
+.pytest_cache/
+.DS_Store
+node_modules/
+listmonk-data/

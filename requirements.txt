@@ -1,0 +1,18 @@
+# Core (required for the app to boot)
+fastapi>=0.110
+uvicorn[standard]>=0.29
+sqlmodel>=0.0.16
+jinja2>=3.1
+python-multipart>=0.0.9
+httpx>=0.27
+APScheduler>=3.10
+python-dotenv>=1.0
+
+# Postgres driver (used by Docker Compose; SQLite needs no driver)
+psycopg[binary]>=3.1
+
+# Optional integrations (lazy-imported; the app still boots if these are absent)
+anthropic>=0.40          # AI layer: niche-term expansion + copywriting
+apify-client>=1.7        # public IG/TikTok discovery
+gspread>=6.0             # Google Sheets lead sync
+google-auth>=2.29        # service-account auth for Sheets

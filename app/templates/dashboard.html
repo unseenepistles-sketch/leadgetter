@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · Lead System{% endblock %}
+{% block content %}
+
+<div class="flex flex-wrap items-center gap-2 mb-6 text-xs">
+  <span class="text-slate-500">Integrations:</span>
+  {% for name, on in capabilities.items() %}
+    <span class="px-2 py-1 rounded-full border {{ 'bg-emerald-50 border-emerald-200 text-emerald-700' if on else 'bg-slate-100 border-slate-200 text-slate-400' }}">
+      {{ '●' if on else '○' }} {{ name }}
+    </span>
+  {% endfor %}
+</div>
+
+<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8">
+  {% set tiles = [
+    ('Leads', counts.leads, 'indigo'),
+    ('Subscribed', counts.subscribed, 'emerald'),
+    ('Creators', counts.creators, 'sky'),
+    ('Campaigns', counts.campaigns, 'amber'),
+    ('Niches', counts.niches, 'rose')
+  ] %}
+  {% for label, val, color in tiles %}
+  <div class="bg-white rounded-xl border border-slate-200 p-4">
+    <div class="text-3xl font-semibold text-slate-900">{{ val }}</div>
+    <div class="text-sm text-slate-500">{{ label }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="grid md:grid-cols-2 gap-6 mb-8">
+  <div class="bg-white rounded-xl border border-slate-200 p-5">
+    <h2 class="font-semibold mb-1">Find creators in a niche</h2>
+    <p class="text-sm text-slate-500 mb-4">Public creator research + partnership targets. No follower data is scraped.</p>
+    <form method="post" action="/discover" class="space-y-3">
+      <div>
+        <label class="block text-sm text-slate-600 mb-1">Search terms / seed topic</label>
+        <input name="seed" required placeholder="christianity awakening spirituality"
+               class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm text-slate-600 mb-1">Location (optional)</label>
+          <input name="location" placeholder="Kenya"
+                 class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="block text-sm text-slate-600 mb-1">Top creators</label>
+          <input name="top_n" type="number" value="10" min="1" max="50"
+                 class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        </div>
+      </div>
+      <div class="flex items-center gap-4 text-sm">
+        <span class="text-slate-600">Platforms:</span>
+        <label class="flex items-center gap-1"><input type="checkbox" name="platforms" value="youtube" checked> YouTube</label>
+        <label class="flex items-center gap-1"><input type="checkbox" name="platforms" value="instagram"> Instagram</label>
+        <label class="flex items-center gap-1"><input type="checkbox" name="platforms" value="tiktok"> TikTok</label>
+      </div>
+      <button class="bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-indigo-700">
+        Run discovery
+      </button>
+    </form>
+  </div>
+
+  <div class="bg-white rounded-xl border border-slate-200 p-5">
+    <h2 class="font-semibold mb-3">Leads captured (14 days)</h2>
+    <canvas id="leadsChart" height="140"></canvas>
+    <h2 class="font-semibold mt-5 mb-3">Creators by platform</h2>
+    <canvas id="platformChart" height="120"></canvas>
+  </div>
+</div>
+
+<div class="grid md:grid-cols-2 gap-6">
+  <div class="bg-white rounded-xl border border-slate-200 p-5">
+    <h2 class="font-semibold mb-3">Recent leads</h2>
+    {% if recent_leads %}
+    <table class="w-full text-sm">
+      <thead class="text-left text-slate-400"><tr><th class="py-1">Email</th><th>Status</th><th>Consented</th></tr></thead>
+      <tbody>
+        {% for l in recent_leads %}
+        <tr class="border-t border-slate-100">
+          <td class="py-1">{{ l.email }}</td>
+          <td><span class="text-xs px-2 py-0.5 rounded-full bg-slate-100">{{ l.status }}</span></td>
+          <td class="text-slate-500">{{ l.consent_at.strftime('%b %d, %H:%M') if l.consent_at }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-sm text-slate-400">No leads yet. Share your <a href="/l" class="text-indigo-600">landing page</a> to start collecting opt-ins.</p>
+    {% endif %}
+  </div>
+
+  <div class="bg-white rounded-xl border border-slate-200 p-5">
+    <h2 class="font-semibold mb-3">Top creators</h2>
+    {% if top_creators %}
+    <table class="w-full text-sm">
+      <thead class="text-left text-slate-400"><tr><th class="py-1">Creator</th><th>Platform</th><th>Followers</th></tr></thead>
+      <tbody>
+        {% for c in top_creators %}
+        <tr class="border-t border-slate-100">
+          <td class="py-1"><a href="{{ c.url }}" target="_blank" class="text-indigo-600">{{ c.display_name or c.handle }}</a></td>
+          <td class="text-slate-500">{{ c.platform }}</td>
+          <td>{{ "{:,}".format(c.followers) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-sm text-slate-400">No creators yet. Run a discovery above.</p>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+async function loadMetrics() {
+  const r = await fetch('/api/metrics');
+  const m = await r.json();
+  new Chart(document.getElementById('leadsChart'), {
+    type: 'line',
+    data: { labels: m.leads_by_day.labels,
+      datasets: [{ label: 'Leads', data: m.leads_by_day.values, borderColor: '#6366f1',
+        backgroundColor: 'rgba(99,102,241,.1)', fill: true, tension: .3 }] },
+    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+  });
+  const labels = m.creators_by_platform.labels.length ? m.creators_by_platform.labels : ['none'];
+  const values = m.creators_by_platform.values.length ? m.creators_by_platform.values : [1];
+  new Chart(document.getElementById('platformChart'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: values, backgroundColor: ['#ef4444','#0ea5e9','#f59e0b','#10b981'] }] },
+    options: { plugins: { legend: { position: 'right' } } }
+  });
+}
+loadMetrics();
+</script>
+{% endblock %}

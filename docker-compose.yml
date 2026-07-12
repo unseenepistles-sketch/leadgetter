@@ -1,0 +1,70 @@
+services:
+  # Application database (source of truth for leads & creators)
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: leadsystem
+      POSTGRES_PASSWORD: leadsystem
+      POSTGRES_DB: leadsystem
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U leadsystem"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # The app
+  app:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://leadsystem:leadsystem@postgres:5432/leadsystem
+      LISTMONK_URL: http://listmonk:9000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  # Listmonk's own database
+  listmonk_db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: listmonk
+      POSTGRES_PASSWORD: listmonk
+      POSTGRES_DB: listmonk
+    volumes:
+      - listmonkdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U listmonk"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Self-hosted email engine
+  listmonk:
+    image: listmonk/listmonk:latest
+    depends_on:
+      listmonk_db:
+        condition: service_healthy
+    ports:
+      - "9000:9000"
+    environment:
+      LISTMONK_app__address: "0.0.0.0:9000"
+      LISTMONK_db__host: listmonk_db
+      LISTMONK_db__port: "5432"
+      LISTMONK_db__user: listmonk
+      LISTMONK_db__password: listmonk
+      LISTMONK_db__database: listmonk
+      LISTMONK_db__ssl_mode: disable
+      LISTMONK_ADMIN_USER: ${LISTMONK_USER:-admin}
+      LISTMONK_ADMIN_PASSWORD: ${LISTMONK_PASSWORD:-listmonkadmin}
+    command: >
+      sh -c "./listmonk --install --idempotent --yes &&
+             ./listmonk --upgrade --yes &&
+             ./listmonk"
+
+volumes:
+  pgdata:
+  listmonkdata:
