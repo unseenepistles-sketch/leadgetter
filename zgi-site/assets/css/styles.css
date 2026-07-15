@@ -341,6 +341,7 @@ section{position:relative;z-index:2}
 .founder__info h3{font-size:1.5rem}
 .founder__role{display:block;color:var(--gold);font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;font-weight:600;margin:.2rem 0 .7rem}
 .founder__info p{color:var(--muted);font-size:.95rem}
+.founder__wa{margin-top:1rem}
 
 /* ============================================================
    FAQ
@@ -376,6 +377,7 @@ section{position:relative;z-index:2}
 .footer__social{display:flex;gap:.7rem}
 .footer__social a{width:36px;height:36px;display:grid;place-items:center;border:1px solid var(--line-soft);border-radius:50%;color:var(--muted);transition:.3s}
 .footer__social a:hover{border-color:var(--gold);color:var(--gold);transform:translateY(-2px)}
+.footer__soon{font-size:.8rem;color:var(--muted-2);letter-spacing:.08em;border:1px dashed var(--line-soft);border-radius:100px;padding:.45em 1em}
 .footer__social svg{width:17px;height:17px;fill:currentColor}
 .footer__copy{text-align:center;margin-top:2rem;color:var(--muted-2);font-size:.8rem;letter-spacing:.05em}
 

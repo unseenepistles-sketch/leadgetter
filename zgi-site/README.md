@@ -21,14 +21,19 @@ Open **`assets/js/main.js`** and edit the `CONFIG` block at the very top:
 
 ```js
 const CONFIG = {
-  whatsapp: "254700000000",   // ← your real WhatsApp number, digits only
-  socials: { instagram: "...", tiktok: "...", facebook: "" }
+  numbers: {
+    james:  "254112142445",   // 0112 142 445
+    steven: "254704665141"    // 0704 665 141
+  },
+  primary: "james",           // who general buttons message — "james" or "steven"
+  socials: { instagram: "", tiktok: "", facebook: "" }  // empty = "coming soon"
 };
 ```
 
-The WhatsApp number powers **every button on the site** (each opens WhatsApp
-with a pre-filled message naming the product/intent). Use full international
-format, digits only: `0712 345 678` → `254712345678`.
+Every button opens WhatsApp with a pre-filled message naming the product/intent.
+General buttons message the `primary` founder; each founder card also has their
+own direct button. Numbers are international format, digits only:
+`0712 345 678` → `254712345678`. Empty socials show a "coming soon" chip.
 
 ## Things to swap for real data
 

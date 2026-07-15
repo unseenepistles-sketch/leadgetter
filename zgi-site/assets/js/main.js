@@ -8,11 +8,15 @@
    Example for Kenya 0712 345 678  ->  254712345678
    ============================================================ */
 const CONFIG = {
-  whatsapp: "254700000000",          // TODO: your real WhatsApp number
+  numbers: {
+    james:  "254112142445",   // 0112 142 445
+    steven: "254704665141"    // 0704 665 141
+  },
+  primary: "james",           // who general buttons message — "james" or "steven"
   socials: {
-    instagram: "https://instagram.com/",   // TODO
-    tiktok:    "https://tiktok.com/",       // TODO
-    facebook:  ""                            // optional
+    instagram: "",            // TODO — empty shows "coming soon"
+    tiktok:    "",            // TODO
+    facebook:  ""             // optional
   }
 };
 
@@ -28,7 +32,9 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 function wireWhatsApp(){
   $$("[data-wa]").forEach(el => {
     const msg = el.getAttribute("data-wa") || "";
-    el.href = `https://wa.me/${CONFIG.whatsapp}?text=${encodeURIComponent(msg)}`;
+    const who = el.getAttribute("data-wa-to") || CONFIG.primary;
+    const num = CONFIG.numbers[who] || CONFIG.numbers[CONFIG.primary];
+    el.href = `https://wa.me/${num}?text=${encodeURIComponent(msg)}`;
   });
 }
 
@@ -43,13 +49,19 @@ function wireFooter(){
     tiktok:'<path d="M16.6 5.8a4.3 4.3 0 0 1-1-2.8h-3v11.4a2.6 2.6 0 1 1-2.6-2.6 2.7 2.7 0 0 1 .8.1V8.8a5.7 5.7 0 0 0-.8-.1 5.6 5.6 0 1 0 5.6 5.6V8.6a7.2 7.2 0 0 0 4.2 1.3V6.9a4.3 4.3 0 0 1-3.2-1.1z"/>',
     facebook:'<path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.3c-1.2 0-1.6.8-1.6 1.6V12h2.8l-.4 2.9h-2.4v7A10 10 0 0 0 22 12z"/>'
   };
+  let any=false;
   Object.entries(CONFIG.socials).forEach(([k,url])=>{
-    if(!url) return;
+    if(!url) return; any=true;
     const a=document.createElement("a");
     a.href=url;a.target="_blank";a.rel="noopener";a.setAttribute("aria-label",k);
     a.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true">${icons[k]||""}</svg>`;
     wrap.appendChild(a);
   });
+  if(!any){
+    const s=document.createElement("span");
+    s.className="footer__soon";s.textContent="Socials — coming soon";
+    wrap.appendChild(s);
+  }
 }
 
 /* ============================================================
