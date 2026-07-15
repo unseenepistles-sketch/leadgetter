@@ -126,12 +126,19 @@ function wireIntro(){
     document.body.classList.remove("lock");
     $("#hero")?.classList.add("ready");
   };
-  if(!intro||reduce){finish();return;}
+  // never trap the page: skip the intro if motion is reduced or the
+  // visitor already started scrolling while the page was loading
+  if(!intro||reduce||scrollY>40){finish();return;}
+  document.body.classList.add("lock");
   z.innerHTML=[...z.textContent].map(c=>`<span class="ch">${c}</span>`).join("");
   $$(".ch",z).forEach((ch,i)=>ch.style.transitionDelay=(i*70)+"ms");
   requestAnimationFrame(()=>requestAnimationFrame(()=>intro.classList.add("play")));
-  const t=setTimeout(finish,2100);
-  intro.addEventListener("click",()=>{clearTimeout(t);finish();},{once:true});
+  const t=setTimeout(finish,2000);
+  const skip=()=>{clearTimeout(t);finish();};
+  intro.addEventListener("click",skip,{once:true});
+  addEventListener("wheel",skip,{once:true,passive:true});
+  addEventListener("touchmove",skip,{once:true,passive:true});
+  addEventListener("keydown",skip,{once:true});
 }
 
 /* ============================================================
@@ -452,8 +459,13 @@ function wireVote(){
 /* ============================================================
    INIT
    ============================================================ */
-document.addEventListener("DOMContentLoaded",()=>{
+const start=()=>{
   wireWhatsApp();wireFooter();wireNav();wireReveal();wireIntro();wireCounts();
   wireCursor();wireTilt();wireParticles();wireGlobe();wireWorldMap();
   wireJourney();wireTimeline();wireFilm();wireVote();wireScrollFX();
-});
+};
+// run as soon as the DOM ahead of this script exists — don't wait for
+// the whole document (large embedded assets) to finish parsing
+document.readyState==="loading"
+  ? document.addEventListener("DOMContentLoaded",start)
+  : start();
