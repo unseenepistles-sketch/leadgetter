@@ -84,7 +84,11 @@ function wireNav(){
    REVEAL ON SCROLL
    ============================================================ */
 function wireReveal(){
-  const els=$$(".reveal");
+  const els=$$(".reveal,.reveal-l,.reveal-r,.section-head");
+  // stagger siblings inside grids so rows cascade instead of popping at once
+  ["#stats .stats__grid",".cargo",".why__grid",".trust__grid",".soon__grid",".faq__list"].forEach(sel=>{
+    $$(sel+" > *").forEach((el,i)=>{el.style.transitionDelay=((i%4)*110)+"ms";});
+  });
   if(reduce){els.forEach(e=>e.classList.add("in"));return;}
   const io=new IntersectionObserver((ents)=>{
     ents.forEach(e=>{if(e.isIntersecting){e.target.classList.add("in");io.unobserve(e.target);}});
@@ -93,10 +97,41 @@ function wireReveal(){
 }
 
 /* ============================================================
-   HERO HEADLINE + globe start
+   SCROLL PROGRESS LINE + TRANSIT DOTS
    ============================================================ */
-function wireHero(){
-  requestAnimationFrame(()=>requestAnimationFrame(()=>$("#hero")?.classList.add("ready")));
+function wireScrollFX(){
+  const bar=$("#scrollProgress");
+  const transits=$$("[data-transit]");
+  transits.forEach(t=>t.style.setProperty("--tw",t.getBoundingClientRect().width+"px"));
+  addEventListener("resize",()=>transits.forEach(t=>t.style.setProperty("--tw",t.getBoundingClientRect().width+"px")),{passive:true});
+  const onScroll=()=>{
+    const max=document.documentElement.scrollHeight-innerHeight;
+    if(bar)bar.style.transform=`scaleX(${max>0?(scrollY/max):0})`;
+    transits.forEach(t=>{
+      const r=t.getBoundingClientRect();
+      const p=Math.min(Math.max((innerHeight-r.top)/(innerHeight*1.15),0),1);
+      t.style.setProperty("--tp",p.toFixed(4));
+    });
+  };
+  onScroll();addEventListener("scroll",onScroll,{passive:true});
+}
+
+/* ============================================================
+   INTRO — wordmark writes itself, then curtain lifts
+   ============================================================ */
+function wireIntro(){
+  const intro=$("#intro"), z=$("#introZenith");
+  const finish=()=>{
+    intro?.classList.add("done");
+    document.body.classList.remove("lock");
+    $("#hero")?.classList.add("ready");
+  };
+  if(!intro||reduce){finish();return;}
+  z.innerHTML=[...z.textContent].map(c=>`<span class="ch">${c}</span>`).join("");
+  $$(".ch",z).forEach((ch,i)=>ch.style.transitionDelay=(i*70)+"ms");
+  requestAnimationFrame(()=>requestAnimationFrame(()=>intro.classList.add("play")));
+  const t=setTimeout(finish,2100);
+  intro.addEventListener("click",()=>{clearTimeout(t);finish();},{once:true});
 }
 
 /* ============================================================
@@ -201,31 +236,48 @@ function wireParticles(){
    ============================================================ */
 function wireGlobe(){
   const cv=$("#heroGlobe"); if(!cv||reduce)return;
-  const ctx=cv.getContext("2d"); let w,h,dpr,R,cx,cy,pts=[],rot=0,tx=0,ty=0,mx=0,my=0,vis=true,raf;
-  const resize=()=>{dpr=Math.min(devicePixelRatio||1,2);const r=cv.getBoundingClientRect();w=cv.width=r.width*dpr;h=cv.height=r.height*dpr;R=Math.min(w,h)*.34;cx=w/2;cy=h*.5;};
+  const ctx=cv.getContext("2d"); let w,h,dpr,R,cx,cy,pts=[],ring=[],rot=0,vRot=0,tx=0,ty=0,mx=0,my=0,vis=true,raf,dragging=false,lastX=0;
+  const resize=()=>{dpr=Math.min(devicePixelRatio||1,2);const r=cv.getBoundingClientRect();w=cv.width=r.width*dpr;h=cv.height=r.height*dpr;R=Math.min(w,h)*.42;cx=w/2;cy=h*.52;};
   resize();addEventListener("resize",resize);
-  const N=touch?260:520;
+  const N=touch?420:900;
   for(let i=0;i<N;i++){const y=1-(i/(N-1))*2,rr=Math.sqrt(1-y*y),th=i*2.399963;pts.push({x:Math.cos(th)*rr,y,z:Math.sin(th)*rr});}
+  for(let i=0;i<140;i++){const th=i/140*Math.PI*2;ring.push({x:Math.cos(th),y:0,z:Math.sin(th)});}
   addEventListener("mousemove",e=>{mx=(e.clientX/innerWidth-.5);my=(e.clientY/innerHeight-.5);},{passive:true});
+  // drag to spin — with inertia
+  cv.addEventListener("pointerdown",e=>{dragging=true;lastX=e.clientX;cv.classList.add("dragging");cv.setPointerCapture(e.pointerId);});
+  cv.addEventListener("pointermove",e=>{
+    if(!dragging)return;
+    const d=(e.clientX-lastX)/Math.max(innerWidth,1);
+    rot+=d*3.4; vRot=d*2.2; lastX=e.clientX;
+  });
+  ["pointerup","pointercancel","lostpointercapture"].forEach(ev=>cv.addEventListener(ev,()=>{dragging=false;cv.classList.remove("dragging");}));
   const io=new IntersectionObserver(es=>{vis=es[0].isIntersecting;if(vis){raf=requestAnimationFrame(draw);}else cancelAnimationFrame(raf);},{threshold:.02});
   io.observe(cv);
+  const project=(p,cosR,sinR,cosP,sinP)=>{
+    let x=p.x*cosR - p.z*sinR, z=p.x*sinR + p.z*cosR, y=p.y;
+    const y2=y*cosP - z*sinP; z=y*sinP + z*cosP;
+    return {sx:cx+x*R, sy:cy+y2*R, depth:(z+1)/2};
+  };
   function draw(){
     if(!vis)return;
-    tx+=(my*.5-tx)*.05; ty+=(mx*.6-ty)*.05; rot+=0.0016;
+    tx+=(my*.6-tx)*.06; ty+=(mx*.9-ty)*.06;
+    rot+=0.0028+vRot; vRot*=.94;
     ctx.clearRect(0,0,w,h);
-    const cosR=Math.cos(rot+ty),sinR=Math.sin(rot+ty),cosP=Math.cos(tx),sinP=Math.sin(tx);
+    const cosR=Math.cos(rot+ty),sinR=Math.sin(rot+ty),cosP=Math.cos(tx*.7),sinP=Math.sin(tx*.7);
     for(const p of pts){
-      let x=p.x*cosR - p.z*sinR, z=p.x*sinR + p.z*cosR, y=p.y;
-      const y2=y*cosP - z*sinP; z=y*sinP + z*cosP; y=y2;
-      const depth=(z+1)/2;
-      const sx=cx+x*R, sy=cy+y*R, r=(depth*1.7+.3)*dpr;
-      ctx.beginPath();ctx.arc(sx,sy,r,0,7);
-      ctx.fillStyle=`rgba(201,162,75,${.12+depth*.55})`;ctx.fill();
+      const q=project(p,cosR,sinR,cosP,sinP);
+      ctx.beginPath();ctx.arc(q.sx,q.sy,(q.depth*2.1+.4)*dpr,0,7);
+      ctx.fillStyle=`rgba(201,162,75,${.16+q.depth*.62})`;ctx.fill();
     }
-    // soft halo
-    const g=ctx.createRadialGradient(cx,cy,R*.2,cx,cy,R*1.5);
-    g.addColorStop(0,"rgba(201,162,75,.05)");g.addColorStop(1,"rgba(201,162,75,0)");
-    ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,R*1.5,0,7);ctx.fill();
+    // glowing equator ring
+    for(const p of ring){
+      const q=project(p,cosR,sinR,cosP,sinP);
+      ctx.beginPath();ctx.arc(q.sx,q.sy,(q.depth*1.5+.5)*dpr,0,7);
+      ctx.fillStyle=`rgba(244,222,147,${.1+q.depth*.7})`;ctx.fill();
+    }
+    const g=ctx.createRadialGradient(cx,cy,R*.2,cx,cy,R*1.6);
+    g.addColorStop(0,"rgba(201,162,75,.07)");g.addColorStop(1,"rgba(201,162,75,0)");
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,R*1.6,0,7);ctx.fill();
     raf=requestAnimationFrame(draw);
   }
   draw();
@@ -330,22 +382,43 @@ function wireTimeline(){
 }
 
 /* ============================================================
-   VIDEO (autoplay in view, scroll scale, sound toggle)
+   FILM — video scrubs with scroll; reads as a living background
    ============================================================ */
-function wireVideo(){
-  const frame=$("#videoFrame"), vid=$("#brandVideo"), btn=$("#soundBtn"); if(!vid)return;
-  const io=new IntersectionObserver(es=>es.forEach(e=>{e.isIntersecting?vid.play().catch(()=>{}):vid.pause();}),{threshold:.35});
-  io.observe(vid);
-  btn?.addEventListener("click",()=>{vid.muted=!vid.muted;btn.textContent=vid.muted?"🔊":"🔇";if(!vid.muted)vid.play().catch(()=>{});});
-  if(!reduce){
-    const onScroll=()=>{
-      const r=frame.getBoundingClientRect(),vh=innerHeight;
-      const p=Math.min(Math.max((vh-r.top)/(vh+r.height),0),1);
-      const s=.92+Math.min(p,.5)*.16;
-      frame.style.transform=`scale(${s.toFixed(3)})`;
-    };
-    onScroll();addEventListener("scroll",onScroll,{passive:true});
+function wireFilm(){
+  const sec=$("#film"), vid=$("#filmVideo"),
+        capA=$(".film__caption--a"), capB=$(".film__caption--b");
+  if(!sec||!vid)return;
+  vid.pause();
+  if(reduce){ // no scrubbing: just play it gently on loop
+    vid.loop=true;
+    new IntersectionObserver(es=>es.forEach(e=>{e.isIntersecting?vid.play().catch(()=>{}):vid.pause();}),{threshold:.2}).observe(vid);
+    capA.classList.add("show");return;
   }
+  let dur=0, target=0, current=-1, vis=false, raf=0;
+  const meta=()=>{dur=vid.duration||0;};
+  vid.readyState>=1?meta():vid.addEventListener("loadedmetadata",meta);
+  const loop=()=>{
+    if(!vis)return;
+    if(dur){
+      current=current<0?target:current+(target-current)*.14;
+      const t=Math.min(current,1)* (dur-.06);
+      if(Math.abs(vid.currentTime-t)>.01){try{vid.currentTime=t;}catch(e){}}
+    }
+    raf=requestAnimationFrame(loop);
+  };
+  const onScroll=()=>{
+    const r=sec.getBoundingClientRect();
+    const total=r.height-innerHeight;
+    const p=Math.min(Math.max(-r.top/(total||1),0),1);
+    target=p;
+    capA.classList.toggle("show",p>.06&&p<.52);
+    capB.classList.toggle("show",p>=.52);
+  };
+  onScroll();addEventListener("scroll",onScroll,{passive:true});
+  new IntersectionObserver(es=>{
+    vis=es[0].isIntersecting;
+    if(vis){raf=requestAnimationFrame(loop);}else cancelAnimationFrame(raf);
+  },{threshold:0}).observe(sec);
 }
 
 /* ============================================================
@@ -380,7 +453,7 @@ function wireVote(){
    INIT
    ============================================================ */
 document.addEventListener("DOMContentLoaded",()=>{
-  wireWhatsApp();wireFooter();wireNav();wireReveal();wireHero();wireCounts();
+  wireWhatsApp();wireFooter();wireNav();wireReveal();wireIntro();wireCounts();
   wireCursor();wireTilt();wireParticles();wireGlobe();wireWorldMap();
-  wireJourney();wireTimeline();wireVideo();wireVote();
+  wireJourney();wireTimeline();wireFilm();wireVote();wireScrollFX();
 });

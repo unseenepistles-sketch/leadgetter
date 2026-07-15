@@ -15,8 +15,20 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="assets/css/styles.css" />
+  <noscript><style>.intro{display:none}body.lock{overflow:auto}</style></noscript>
 </head>
-<body>
+<body class="lock">
+  <!-- intro: wordmark writes itself, curtain lifts -->
+  <div class="intro" id="intro" aria-hidden="true">
+    <div class="intro__word">
+      <span class="intro__zenith" id="introZenith">ZENITH</span>
+      <span class="intro__rule"></span>
+      <span class="intro__sub">GLOBAL&nbsp;IMPORTS</span>
+    </div>
+  </div>
+
+  <span class="scrollbar-top" id="scrollProgress" aria-hidden="true"></span>
+
   <!-- ambient layers -->
   <canvas class="fx-particles" id="particles" aria-hidden="true"></canvas>
   <div class="fx-grid" aria-hidden="true"></div>
@@ -133,14 +145,17 @@
       <p class="stats__note reveal">Placeholder figures — swap for your real numbers before launch. <em>Real</em> beats <em>big</em>.</p>
     </section>
 
-    <!-- ============ BRAND VIDEO ============ -->
-    <section class="video" id="video">
-      <h2 class="video__heading reveal">From factory floor to your front door.</h2>
-      <div class="video__frame" id="videoFrame">
-        <video src="assets/video/brand.mp4" muted loop playsinline preload="metadata" id="brandVideo"></video>
-        <button class="video__sound" id="soundBtn" aria-label="Toggle sound">🔊</button>
+    <!-- ============ FILM — scroll-driven background video ============ -->
+    <section class="film" id="film" aria-label="Zenith sources the whole world">
+      <div class="film__sticky">
+        <video src="assets/video/continents.mp4" muted playsinline preload="auto" id="filmVideo" aria-hidden="true"></video>
+        <div class="film__shade" aria-hidden="true"></div>
+        <p class="film__caption film__caption--a">One mark of trust.</p>
+        <p class="film__caption film__caption--b">We source from all over the world —<br />and land it at your door in Kenya.</p>
       </div>
     </section>
+
+    <div class="transit" data-transit aria-hidden="true"><span class="transit__dot"></span></div>
 
     <!-- ============ PRODUCTS ============ -->
     <section class="products" id="products">
@@ -313,6 +328,8 @@
       </div>
     </section>
 
+    <div class="transit transit--rev" data-transit aria-hidden="true"><span class="transit__dot"></span></div>
+
     <!-- ============ FOUNDERS ============ -->
     <section class="founders" id="founders">
       <header class="section-head">
@@ -321,13 +338,13 @@
         <p class="section-head__lead reveal">Two young founders who got tired of watching Kenyans overpay for low-quality products — so they built a company that searches the world for the things worth bringing home.</p>
       </header>
       <div class="founders__grid">
-        <article class="founder reveal">
+        <article class="founder reveal-l">
           <div class="founder__photo"><img src="assets/img/founder-james.jpg" alt="James, Co-Founder &amp; CEO" loading="lazy" /></div>
           <div class="founder__info"><h3>James</h3><span class="founder__role">Co-Founder &amp; CEO</span>
             <p>Runs operations and supplier relationships — makes sure every shipment clears and every product performs.</p>
             <a class="btn btn--wa btn--sm founder__wa magnetic" data-wa="Hi James 👋 I'm reaching out from the ZGI website." data-wa-to="james" target="_blank" rel="noopener"><span class="wa-ico"></span> WhatsApp James</a></div>
         </article>
-        <article class="founder reveal">
+        <article class="founder founder--flip reveal-r">
           <div class="founder__photo"><img src="assets/img/founder-steve.jpg" alt="Steven, Co-Founder &amp; President" loading="lazy" /></div>
           <div class="founder__info"><h3>Steven</h3><span class="founder__role">Co-Founder &amp; President</span>
             <p>Leads product discovery and growth — hunts the next thing Kenya hasn't seen yet.</p>
