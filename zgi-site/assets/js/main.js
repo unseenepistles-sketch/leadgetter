@@ -392,33 +392,87 @@ function wireTimeline(){
    FILM — video scrubs with scroll; reads as a living background
    ============================================================ */
 function wireFilm(){
-  const sec=$("#film"), vid=$("#filmVideo"),
+  const sec=$("#film"), vid=$("#filmVideo"), cvs=$("#filmCanvas"),
         capA=$(".film__caption--a"), capB=$(".film__caption--b");
   if(!sec||!vid)return;
   vid.pause();
   if(reduce){ // no scrubbing: just play it gently on loop
-    vid.loop=true;
+    cvs.style.display="none";vid.loop=true;
     new IntersectionObserver(es=>es.forEach(e=>{e.isIntersecting?vid.play().catch(()=>{}):vid.pause();}),{threshold:.2}).observe(vid);
     capA.classList.add("show");return;
   }
-  // buffer the entire clip locally first — scrubbing must never wait on
-  // the network, or the picture lags behind the scroll
+  // buffer the entire clip locally first so extraction never waits on the network
   const srcAttr=vid.getAttribute("src");
   if(srcAttr && !srcAttr.startsWith("blob:")){
     fetch(srcAttr).then(r=>r.ok?r.blob():Promise.reject())
       .then(b=>{vid.src=URL.createObjectURL(b);})
       .catch(()=>{});
   }
-  let dur=0, target=0, current=-1, vis=false, raf=0, seekBusy=false, seekAt=0;
-  const meta=()=>{dur=vid.duration||0;try{vid.currentTime=0.001;}catch(e){}};
-  vid.readyState>=1?meta():vid.addEventListener("loadedmetadata",meta);
-  vid.addEventListener("seeked",()=>{seekBusy=false;});
+
+  /* The clip has sparse keyframes, so seeking it live lags behind the
+     scroll. Instead: decode it ONCE into still frames up front, then just
+     paint the matching frame per scroll position — instant on any device. */
+  const FR=36, W=touch?480:768;
+  const ctx=cvs.getContext("2d");
+  let H=0, frames=[], extracting=false, extracted=false;
+  let dur=0, target=0, current=-1, vis=false, raf=0, painted=-1;
+
+  const meta=()=>{
+    dur=vid.duration||0;
+    if(!vid.videoWidth)return;
+    H=Math.round(W*vid.videoHeight/vid.videoWidth);
+    cvs.width=W;cvs.height=H;
+    extract();
+  };
+  vid.readyState>=1&&vid.videoWidth?meta():vid.addEventListener("loadedmetadata",meta);
+
+  function extract(){
+    if(extracting||extracted||!dur)return;
+    extracting=true;
+    let i=0;
+    const onSeek=()=>{
+      const c=document.createElement("canvas");c.width=W;c.height=H;
+      const cc=c.getContext("2d");cc.drawImage(vid,0,0,W,H);
+      if(i===0){ // iOS can paint blank until the video has played once
+        const d=cc.getImageData(0,0,10,10).data;
+        let lit=false;for(let k=0;k<d.length;k+=4){if(d[k]+d[k+1]+d[k+2]>24){lit=true;break;}}
+        if(!lit&&!extract.primed){
+          extract.primed=true;
+          vid.removeEventListener("seeked",onSeek);clearTimeout(guard);extracting=false;
+          vid.play().then(()=>{vid.pause();extract();}).catch(()=>{extract();});
+          return;
+        }
+      }
+      frames.push(c);painted=-1;
+      i++;
+      if(i>=FR){extracted=true;vid.removeEventListener("seeked",onSeek);clearTimeout(guard);return;}
+      try{vid.currentTime=(i/(FR-1))*(dur-.1)+.03;}catch(e){}
+    };
+    vid.addEventListener("seeked",onSeek);
+    // if decoding is broken here, fall back to scrubbing the raw video
+    const guard=setTimeout(()=>{
+      if(frames.length<2){vid.removeEventListener("seeked",onSeek);cvs.style.display="none";fallbackScrub();}
+    },6000);
+    try{vid.currentTime=.03;}catch(e){}
+  }
+
+  // last-resort path: seek the video element directly (previous behaviour)
+  let fbOn=false, seekBusy=false, seekAt=0;
+  function fallbackScrub(){
+    if(fbOn)return;fbOn=true;
+    vid.addEventListener("seeked",()=>{seekBusy=false;});
+  }
+
   const loop=()=>{
     if(!vis)return;
-    if(dur){
-      current=current<0?target:current+(target-current)*.3;
+    current=current<0?target:current+(target-current)*.35;
+    if(frames.length&&!fbOn){
+      const n=extracted?FR:frames.length;
+      const i=Math.max(0,Math.min(n-1,Math.round(current*(FR-1))));
+      if(frames[i]&&i!==painted){ctx.drawImage(frames[i],0,0);painted=i;}
+    }else if(fbOn&&dur){
       const t=Math.min(current,1)*(dur-.06);
-      if(seekBusy&&performance.now()-seekAt>300)seekBusy=false; // stuck-seek safety
+      if(seekBusy&&performance.now()-seekAt>300)seekBusy=false;
       if(!seekBusy&&Math.abs(vid.currentTime-t)>.008){
         seekBusy=true;seekAt=performance.now();
         try{vid.currentTime=t;}catch(e){seekBusy=false;}
@@ -437,7 +491,7 @@ function wireFilm(){
   onScroll();addEventListener("scroll",onScroll,{passive:true});
   new IntersectionObserver(es=>{
     vis=es[0].isIntersecting;
-    if(vis){raf=requestAnimationFrame(loop);}else cancelAnimationFrame(raf);
+    if(vis){extract();raf=requestAnimationFrame(loop);}else cancelAnimationFrame(raf);
   },{threshold:0}).observe(sec);
 }
 

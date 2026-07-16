@@ -23,7 +23,7 @@
 }
 
 *{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;overflow-x:clip}
 body{
   background:var(--ink);color:var(--text);
   font-family:"Inter",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
@@ -203,7 +203,8 @@ section{position:relative;z-index:2}
 /* ============================================================
    WORLD MAP / DISCOVER
    ============================================================ */
-.worldmap{position:relative;max-width:1000px;margin:0 auto;aspect-ratio:16/9;min-height:340px}
+.worldmap{position:relative;max-width:1000px;margin:0 auto}
+.worldmap__stage{position:relative;aspect-ratio:16/9;min-height:300px}
 .worldmap__canvas{position:absolute;inset:0;width:100%;height:100%}
 .worldmap__hubs{position:absolute;inset:0}
 .hub{position:absolute;transform:translate(-50%,-50%);z-index:3}
@@ -243,6 +244,7 @@ section{position:relative;z-index:2}
 .film{height:240vh;max-width:none;padding:0;margin:0}
 .film__sticky{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden;background:#000}
 .film__sticky video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scale(1.02)}
+.film__canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scale(1.02)}
 .film__shade{position:absolute;inset:0;pointer-events:none;
   background:
     linear-gradient(180deg,var(--ink) 0%,transparent 14%,transparent 86%,var(--ink) 100%),
@@ -458,10 +460,22 @@ section{position:relative;z-index:2}
   .trust__grid{grid-template-columns:repeat(2,1fr)}
   .soon__grid{grid-template-columns:repeat(2,1fr)}
 }
+@media(max-width:700px){
+  /* world map: panel drops below the map instead of covering it,
+     dots get real thumb-sized touch targets */
+  .worldmap__panel{position:static;max-width:none;margin-top:1rem;backdrop-filter:none;background:var(--ink-2)}
+  .hub__dot{width:18px;height:18px}
+  .hub__dot::after{font-size:.58rem;top:-1.7em}
+}
 @media(max-width:640px){
   .founder,.founder--flip{flex-direction:column}
   .founder__photo{flex:0 0 auto;min-height:0;aspect-ratio:1/1}
   .film{height:200vh}
+  .film__caption{right:1.2rem;font-size:clamp(1.3rem,6.4vw,1.9rem);bottom:clamp(3.4rem,10vh,6rem)}
+  .hero__cta .btn{flex:1 1 100%;justify-content:center}
+  .import__cta .btn,.wholesale__inner .btn{width:100%;justify-content:center}
+  .section-head__lead{font-size:.98rem}
+  .stat{padding:1.5rem 1rem}
   .cargo,.why__grid,.founders__grid{grid-template-columns:1fr}
   .stats__grid{grid-template-columns:1fr}
   .trust__grid{grid-template-columns:1fr}
@@ -469,7 +483,10 @@ section{position:relative;z-index:2}
   .wholesale__inner{flex-direction:column;align-items:flex-start}
   body.has-cursor{cursor:auto}
   .fx-cursor,.fx-cursor-dot{display:none}
+  .fab-wa{bottom:calc(1.1rem + env(safe-area-inset-bottom))}
 }
+/* battery: park the decorative grid drift on touch devices */
+@media(hover:none){.fx-grid{animation:none}}
 
 /* reduced motion */
 @media(prefers-reduced-motion:reduce){
