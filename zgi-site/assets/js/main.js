@@ -401,15 +401,28 @@ function wireFilm(){
     new IntersectionObserver(es=>es.forEach(e=>{e.isIntersecting?vid.play().catch(()=>{}):vid.pause();}),{threshold:.2}).observe(vid);
     capA.classList.add("show");return;
   }
-  let dur=0, target=0, current=-1, vis=false, raf=0;
-  const meta=()=>{dur=vid.duration||0;};
+  // buffer the entire clip locally first — scrubbing must never wait on
+  // the network, or the picture lags behind the scroll
+  const srcAttr=vid.getAttribute("src");
+  if(srcAttr && !srcAttr.startsWith("blob:")){
+    fetch(srcAttr).then(r=>r.ok?r.blob():Promise.reject())
+      .then(b=>{vid.src=URL.createObjectURL(b);})
+      .catch(()=>{});
+  }
+  let dur=0, target=0, current=-1, vis=false, raf=0, seekBusy=false, seekAt=0;
+  const meta=()=>{dur=vid.duration||0;try{vid.currentTime=0.001;}catch(e){}};
   vid.readyState>=1?meta():vid.addEventListener("loadedmetadata",meta);
+  vid.addEventListener("seeked",()=>{seekBusy=false;});
   const loop=()=>{
     if(!vis)return;
     if(dur){
-      current=current<0?target:current+(target-current)*.14;
-      const t=Math.min(current,1)* (dur-.06);
-      if(Math.abs(vid.currentTime-t)>.01){try{vid.currentTime=t;}catch(e){}}
+      current=current<0?target:current+(target-current)*.3;
+      const t=Math.min(current,1)*(dur-.06);
+      if(seekBusy&&performance.now()-seekAt>300)seekBusy=false; // stuck-seek safety
+      if(!seekBusy&&Math.abs(vid.currentTime-t)>.008){
+        seekBusy=true;seekAt=performance.now();
+        try{vid.currentTime=t;}catch(e){seekBusy=false;}
+      }
     }
     raf=requestAnimationFrame(loop);
   };
