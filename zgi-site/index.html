@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zenith Global Imports — The world makes it. We bring it home.</title>
+  <meta name="description" content="Zenith Global Imports discovers the world's best products before everyone else and brings them to Kenya. Import with confidence — retail, wholesale, and global sourcing. Pay on delivery." />
+  <meta property="og:title" content="Zenith Global Imports — Connecting Kenya to the world's best" />
+  <meta property="og:description" content="We discover the world's best products before everyone else and bring them to Kenya. Retail · Wholesale · Global Sourcing. Pay on delivery." />
+  <meta property="og:type" content="website" />
+  <meta name="theme-color" content="#07080A" />
+  <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/css/styles.css" />
+  <noscript><style>.intro{display:none}body.lock{overflow:auto}</style></noscript>
+</head>
+<body>
+  <!-- intro: wordmark writes itself, curtain lifts -->
+  <div class="intro" id="intro" aria-hidden="true">
+    <div class="intro__word">
+      <span class="intro__zenith" id="introZenith">ZENITH</span>
+      <span class="intro__rule"></span>
+      <span class="intro__sub">GLOBAL&nbsp;IMPORTS</span>
+    </div>
+  </div>
+
+  <span class="scrollbar-top" id="scrollProgress" aria-hidden="true"></span>
+
+  <!-- ambient layers -->
+  <canvas class="fx-particles" id="particles" aria-hidden="true"></canvas>
+  <div class="fx-grid" aria-hidden="true"></div>
+  <div class="fx-cursor" id="cursor" aria-hidden="true"></div>
+  <div class="fx-cursor-dot" id="cursorDot" aria-hidden="true"></div>
+
+  <!-- ============ NAVIGATION ============ -->
+  <header class="nav" id="nav">
+    <a href="#top" class="nav__brand" aria-label="Zenith Global Imports home">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 100 100" class="logo__mark" role="img" aria-label="Zenith Global Imports logo">
+          <defs>
+            <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#F4DE93" /><stop offset="0.5" stop-color="#C9A24B" /><stop offset="1" stop-color="#8F6820" />
+            </linearGradient>
+            <clipPath id="globeClip"><circle cx="48" cy="52" r="30" /></clipPath>
+          </defs>
+          <g stroke="url(#gold)" fill="none" stroke-width="3.4" stroke-linecap="round">
+            <circle cx="48" cy="52" r="30" />
+            <g clip-path="url(#globeClip)" stroke-width="2.6">
+              <ellipse cx="48" cy="52" rx="12" ry="30" /><ellipse cx="48" cy="52" rx="24" ry="30" />
+              <line x1="18" y1="52" x2="78" y2="52" /><path d="M18 37 Q48 46 78 37" /><path d="M18 67 Q48 58 78 67" />
+            </g>
+          </g>
+          <path d="M20 74 Q40 92 62 78 Q86 63 78 34 L86 40 M78 34 L70 43" fill="none" stroke="url(#gold)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </span>
+      <span class="wordmark">
+        <span class="wordmark__top">ZENITH</span>
+        <span class="wordmark__sub">GLOBAL IMPORTS</span>
+      </span>
+    </a>
+
+    <nav class="nav__links" aria-label="Primary">
+      <a href="#discover">Discover</a>
+      <a href="#products">Products</a>
+      <a href="#import">Import For Me</a>
+      <a href="#trust">Why Us</a>
+      <a href="#founders">Founders</a>
+    </nav>
+
+    <a class="btn btn--wa nav__cta magnetic" data-wa="Hi Zenith Global Imports 👋 I'd like to know more." target="_blank" rel="noopener">
+      <span class="wa-ico" aria-hidden="true"></span> WhatsApp Us
+    </a>
+    <button class="nav__burger" id="burger" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button>
+  </header>
+
+  <main id="top">
+
+    <!-- ============ HERO ============ -->
+    <section class="hero" id="hero">
+      <canvas class="hero__globe" id="heroGlobe" aria-hidden="true"></canvas>
+      <div class="hero__inner">
+        <p class="hero__eyebrow reveal">Worldwide &rarr; Kenya &nbsp;·&nbsp; First to Market</p>
+        <h1 class="hero__title">
+          <span class="line">The world makes it.</span>
+          <span class="line line--gold">We bring it home.</span>
+        </h1>
+        <p class="hero__sub reveal">
+          We discover products that haven't reached Kenya yet — verify them, import them, and deliver
+          them to your door. Import with confidence. Wholesale. Retail. Global sourcing.
+        </p>
+        <div class="hero__cta reveal">
+          <a href="#products" class="btn btn--gold magnetic">See What We've Landed</a>
+          <a href="#import" class="btn btn--ghost magnetic">Source Something For Me</a>
+        </div>
+      </div>
+      <a href="#discover" class="hero__scroll" aria-label="Scroll down"><span></span></a>
+    </section>
+
+    <!-- ============ TICKER ============ -->
+    <div class="ticker" aria-hidden="true">
+      <div class="ticker__track">
+        <span>SHENZHEN &rarr; NAIROBI</span><i>✦</i><span>TOKYO &rarr; NAIROBI</span><i>✦</i>
+        <span>DUBAI &rarr; NAIROBI</span><i>✦</i><span>FIRST TO MARKET</span><i>✦</i>
+        <span>PAY ON DELIVERY</span><i>✦</i><span>RETAIL &amp; WHOLESALE</span><i>✦</i>
+        <span>QUALITY-CHECKED BEFORE IT SHIPS</span><i>✦</i>
+        <span>SHENZHEN &rarr; NAIROBI</span><i>✦</i><span>TOKYO &rarr; NAIROBI</span><i>✦</i>
+        <span>DUBAI &rarr; NAIROBI</span><i>✦</i><span>FIRST TO MARKET</span><i>✦</i>
+        <span>PAY ON DELIVERY</span><i>✦</i><span>RETAIL &amp; WHOLESALE</span><i>✦</i>
+        <span>QUALITY-CHECKED BEFORE IT SHIPS</span><i>✦</i>
+      </div>
+    </div>
+
+    <!-- ============ GLOBAL SOURCING MAP ============ -->
+    <section class="discover" id="discover">
+      <header class="section-head">
+        <span class="section-head__kicker">Global Sourcing Network</span>
+        <h2 class="reveal">We don't stop at China.<br />We source the whole world.</h2>
+        <p class="section-head__lead reveal">Tap a hub to see what we bring home from there. Every route ends the same place — your door in Kenya.</p>
+      </header>
+
+      <div class="worldmap">
+        <div class="worldmap__stage">
+          <canvas class="worldmap__canvas" id="worldCanvas" aria-hidden="true"></canvas>
+          <div class="worldmap__hubs" id="hubs"></div>
+        </div>
+        <div class="worldmap__panel" id="hubPanel" aria-live="polite">
+          <span class="worldmap__panel-flag" id="hubFlag">🇰🇪</span>
+          <h3 id="hubName">Kenya — Distribution Hub</h3>
+          <ul id="hubList"><li>Wholesale &amp; Retail</li><li>Countrywide Delivery</li><li>Customer Support</li></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ TRUST STATS ============ -->
+    <section class="stats" id="stats">
+      <div class="stats__grid">
+        <div class="stat reveal"><span class="stat__num" data-count="120" data-suffix="+">0</span><span class="stat__label">Products Imported</span></div>
+        <div class="stat reveal"><span class="stat__num" data-count="5000" data-suffix="+">0</span><span class="stat__label">Units Delivered</span></div>
+        <div class="stat reveal"><span class="stat__num" data-count="1800" data-suffix="+">0</span><span class="stat__label">Happy Customers</span></div>
+        <div class="stat reveal"><span class="stat__num" data-count="42" data-suffix="%">0</span><span class="stat__label">Repeat Buyers</span></div>
+        <div class="stat reveal"><span class="stat__num" data-count="34" data-suffix="">0</span><span class="stat__label">Cities Delivered To</span></div>
+        <div class="stat reveal"><span class="stat__num" data-count="9" data-suffix="">0</span><span class="stat__label">Countries Sourced From</span></div>
+      </div>
+      <p class="stats__note reveal">Placeholder figures — swap for your real numbers before launch. <em>Real</em> beats <em>big</em>.</p>
+    </section>
+
+    <!-- ============ FILM — scroll-driven background video ============ -->
+    <section class="film" id="film" aria-label="Zenith sources the whole world">
+      <div class="film__sticky">
+        <video src="assets/video/continents.mp4" muted playsinline preload="auto" id="filmVideo" aria-hidden="true"></video>
+        <canvas id="filmCanvas" class="film__canvas" aria-hidden="true"></canvas>
+        <div class="film__shade" aria-hidden="true"></div>
+        <p class="film__caption film__caption--a">One mark of trust.</p>
+        <p class="film__caption film__caption--b">We source from all over the world —<br />and land it at your door in Kenya.</p>
+      </div>
+    </section>
+
+    <div class="transit" data-transit aria-hidden="true"><span class="transit__dot"></span></div>
+
+    <!-- ============ PRODUCTS ============ -->
+    <section class="products" id="products">
+      <header class="section-head">
+        <span class="section-head__kicker">The Cargo Log</span>
+        <h2 class="reveal">Products Kenya had never seen.</h2>
+        <p class="section-head__lead reveal">Each one discovered, verified, and landed by us. Hover to see its story.</p>
+      </header>
+
+      <div class="cargo">
+        <article class="card reveal" data-tilt data-spot>
+          <span class="card__stock card__stock--live">● Available now · 24 left</span>
+          <div class="card__media"><img src="assets/img/ubrush.jpg" alt="360° U-Brush automatic toothbrush" loading="lazy" />
+            <span class="card__reveal">We found it. We imported it. Kenya's first.</span></div>
+          <div class="card__body">
+            <div class="card__meta"><span class="card__id">ZGI-001</span><span class="badge badge--first">First in Kenya</span></div>
+            <h3>360° Smart Toothbrush</h3>
+            <p>Brush every tooth at once — a full clean in 30 seconds. We were first to bring it to Kenya. Everyone else is playing catch-up.</p>
+            <a class="btn btn--wa card__btn magnetic" data-wa="Hi ZGI, I want the 360° Smart Toothbrush (ZGI-001)." target="_blank" rel="noopener"><span class="wa-ico"></span> Order on WhatsApp</a>
+          </div>
+        </article>
+
+        <article class="card reveal" data-tilt data-spot>
+          <span class="card__stock card__stock--live">● Available now</span>
+          <div class="card__media"><img src="assets/img/dispenser.jpg" alt="UV toothpaste dispenser and brush holder" loading="lazy" />
+            <span class="card__reveal">Tiny product. Daily convenience. Cleaner sink.</span></div>
+          <div class="card__body">
+            <div class="card__meta"><span class="card__id">ZGI-002</span><span class="badge badge--stock">In Stock</span></div>
+            <h3>Toothpaste Dispenser + Holder</h3>
+            <p>Perfect squeeze, zero waste, brushes clean and off the counter. A small upgrade that feels like a smart home.</p>
+            <a class="btn btn--wa card__btn magnetic" data-wa="Hi ZGI, I want the Toothpaste Dispenser + Holder (ZGI-002)." target="_blank" rel="noopener"><span class="wa-ico"></span> Order on WhatsApp</a>
+          </div>
+        </article>
+
+        <article class="card reveal" data-tilt data-spot>
+          <span class="card__stock card__stock--low">● Only 18 left</span>
+          <div class="card__media"><img src="assets/img/gamepad.jpg" alt="Mobile gaming controllers" loading="lazy" />
+            <span class="card__reveal">Premium feel. Budget price. Tested by us.</span></div>
+          <div class="card__body">
+            <div class="card__meta"><span class="card__id">ZGI-003</span><span class="badge badge--stock">In Stock</span></div>
+            <h3>Gaming Controllers</h3>
+            <p>Gaming shouldn't cost a fortune. Console-grade feel priced for the everyday gamer — tested by us before it reaches you.</p>
+            <a class="btn btn--wa card__btn magnetic" data-wa="Hi ZGI, I want the Gaming Controllers (ZGI-003)." target="_blank" rel="noopener"><span class="wa-ico"></span> Order on WhatsApp</a>
+          </div>
+        </article>
+
+        <article class="card card--sold reveal" data-tilt data-spot>
+          <span class="card__stock card__stock--out">● Sold out · restock in 14 days</span>
+          <div class="card__media"><img src="assets/img/watches.jpg" alt="Premium skeleton watches" loading="lazy" />
+            <span class="card__reveal">Luxury doesn't have to scream. Every unit gone.</span></div>
+          <div class="card__body">
+            <div class="card__meta"><span class="card__id">ZGI-004</span><span class="badge badge--sold">Sold Out</span></div>
+            <h3>Premium Watches</h3>
+            <p>Gone. Every unit. That's what happens when quality meets the right price. Join the list for the next batch.</p>
+            <a class="btn btn--outline card__btn magnetic" data-wa="Hi ZGI, add me to the restock list for the Premium Watches (ZGI-004)." target="_blank" rel="noopener">Join the Restock List</a>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ============ WHY ZENITH ============ -->
+    <section class="why" id="why">
+      <header class="section-head">
+        <span class="section-head__kicker">Why Zenith Exists</span>
+        <h2 class="reveal">We don't sell products.<br />We sell discovery.</h2>
+      </header>
+      <div class="why__grid">
+        <article class="why__card reveal"><p class="why__most">Most importers chase trends.</p><p class="why__we">We create them.</p></article>
+        <article class="why__card reveal"><p class="why__most">Most businesses copy products.</p><p class="why__we">We discover them first.</p></article>
+        <article class="why__card reveal"><p class="why__most">Most people buy cheap.</p><p class="why__we">We buy smart.</p></article>
+        <article class="why__card reveal"><p class="why__most">Most suppliers disappear.</p><p class="why__we">We're here for the long haul.</p></article>
+      </div>
+    </section>
+
+    <!-- ============ IMPORT FOR ME (sourcing journey) ============ -->
+    <section class="import" id="import">
+      <header class="section-head">
+        <span class="section-head__kicker">Import For Me</span>
+        <h2 class="reveal">Need something specific?<br />We'll find it. Anywhere.</h2>
+        <p class="section-head__lead reveal">Send a photo or a link. We find the manufacturer, verify quality, negotiate the price, and handle the whole import — landed, all-in, no surprise fees.</p>
+      </header>
+
+      <ol class="journey" id="journey">
+        <li class="journey__step"><span class="journey__ico">📷</span><span class="journey__t">You send a photo</span></li>
+        <li class="journey__step"><span class="journey__ico">🏭</span><span class="journey__t">We find the factory</span></li>
+        <li class="journey__step"><span class="journey__ico">🔎</span><span class="journey__t">We verify quality</span></li>
+        <li class="journey__step"><span class="journey__ico">🤝</span><span class="journey__t">We negotiate price</span></li>
+        <li class="journey__step"><span class="journey__ico">🚢</span><span class="journey__t">We import &amp; clear customs</span></li>
+        <li class="journey__step"><span class="journey__ico">📦</span><span class="journey__t">We deliver to your door</span></li>
+      </ol>
+
+      <div class="import__cta reveal">
+        <a class="btn btn--gold btn--big magnetic" data-wa="Hi ZGI, I'd like to source a product. Here's the photo/link and what I'm looking for:" target="_blank" rel="noopener">Start a Sourcing Request</a>
+      </div>
+    </section>
+
+    <!-- ============ PROCESS TIMELINE ============ -->
+    <section class="process" id="process">
+      <header class="section-head">
+        <span class="section-head__kicker">How It Works</span>
+        <h2 class="reveal">Every order, the same disciplined path.</h2>
+      </header>
+      <div class="timeline" id="timeline">
+        <div class="timeline__line"><span class="timeline__fill" id="tlFill"></span></div>
+        <div class="tl-step reveal"><span class="tl-step__no">01</span><h3>You Ask</h3><p>Message us the product or send a photo/link.</p></div>
+        <div class="tl-step reveal"><span class="tl-step__no">02</span><h3>We Source</h3><p>We locate the right manufacturer worldwide.</p></div>
+        <div class="tl-step reveal"><span class="tl-step__no">03</span><h3>We Verify</h3><p>Quality-checked before a single unit ships.</p></div>
+        <div class="tl-step reveal"><span class="tl-step__no">04</span><h3>We Negotiate</h3><p>Best price, landed and all-in.</p></div>
+        <div class="tl-step reveal"><span class="tl-step__no">05</span><h3>We Import</h3><p>Shipping and logistics handled end-to-end.</p></div>
+        <div class="tl-step reveal"><span class="tl-step__no">06</span><h3>We Clear Customs</h3><p>Paperwork and duties — our headache, not yours.</p></div>
+        <div class="tl-step reveal"><span class="tl-step__no">07</span><h3>We Deliver</h3><p>To your door. You inspect, then you pay.</p></div>
+      </div>
+    </section>
+
+    <!-- ============ TRUST ============ -->
+    <section class="trust" id="trust">
+      <header class="section-head">
+        <span class="section-head__kicker">Why People Buy From Us</span>
+        <h2 class="reveal">You've been burned before.<br />We built ZGI to end that.</h2>
+      </header>
+      <div class="trust__grid">
+        <article class="proof reveal"><span class="proof__no">01</span><h3>Pay on delivery</h3><p>You don't send money into the void. Product arrives, you inspect it, then you pay. Our risk, not yours.</p></article>
+        <article class="proof reveal"><span class="proof__no">02</span><h3>Real people, real faces</h3><p>Two founders, names and photos on this site. Not a faceless page that vanishes after your deposit clears.</p></article>
+        <article class="proof reveal"><span class="proof__no">03</span><h3>We test before we sell</h3><p>Every product line gets inspected and used by us first. If it wouldn't survive our own homes, it doesn't make the catalog.</p></article>
+        <article class="proof reveal"><span class="proof__no">04</span><h3>Track record, not promises</h3><p>First to bring the 360° Smart Toothbrush to Kenya. Watches sold out completely. Ask our buyers.</p></article>
+      </div>
+    </section>
+
+    <!-- ============ REVIEWS ============ -->
+    <section class="reviews" id="reviews">
+      <header class="section-head">
+        <span class="section-head__kicker">Word on the Street</span>
+        <h2 class="reveal">Real buyers. Real deliveries.</h2>
+        <p class="section-head__lead reveal">Placeholder testimonials — replace with your real WhatsApp screenshots &amp; customer clips. In Kenya, these convert harder than anything else on the page.</p>
+      </header>
+      <div class="reviews__row" id="reviewsRow">
+        <div class="reviews__track">
+          <figure class="review"><p>"Paid on delivery, inspected it first. Everything they promised. The U-Brush is unreal."</p><figcaption>— Wanjiru, Nairobi</figcaption></figure>
+          <figure class="review"><p>"Ordered controllers for my shop. Consistent supply, better margins than my old plug."</p><figcaption>— Brian, Nakuru</figcaption></figure>
+          <figure class="review"><p>"They sourced a product I couldn't find anywhere. Quoted all-in, delivered in 3 weeks."</p><figcaption>— Aisha, Mombasa</figcaption></figure>
+          <figure class="review"><p>"First time I trusted an online importer. Faces on the site made the difference."</p><figcaption>— Kevin, Eldoret</figcaption></figure>
+          <figure class="review"><p>"Watches sold out before I could grab one. On the restock list now — that's demand."</p><figcaption>— Faith, Thika</figcaption></figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ COMING SOON / VOTE ============ -->
+    <section class="soon" id="soon">
+      <header class="section-head">
+        <span class="section-head__kicker">Discovery Lab</span>
+        <h2 class="reveal">What should we bring next?</h2>
+        <p class="section-head__lead reveal">We've got our eye on these. Vote for the one you want landed first — the leader jumps the queue.</p>
+      </header>
+      <div class="soon__grid" id="voteGrid">
+        <article class="vote" data-id="smarthome"><h3>Smart Home Kit</h3><p>App-controlled plugs, bulbs &amp; sensors.</p><div class="vote__bar"><span></span></div><button class="vote__btn magnetic">▲ Vote <b>0</b></button></article>
+        <article class="vote" data-id="earbuds"><h3>ANC Earbuds</h3><p>Flagship-grade sound, everyday price.</p><div class="vote__bar"><span></span></div><button class="vote__btn magnetic">▲ Vote <b>0</b></button></article>
+        <article class="vote" data-id="projector"><h3>Mini Projector</h3><p>Cinema on any wall, pocket-sized.</p><div class="vote__bar"><span></span></div><button class="vote__btn magnetic">▲ Vote <b>0</b></button></article>
+        <article class="vote" data-id="massager"><h3>Massage Gun</h3><p>Recovery tech that was gym-only — until now.</p><div class="vote__bar"><span></span></div><button class="vote__btn magnetic">▲ Vote <b>0</b></button></article>
+      </div>
+    </section>
+
+    <!-- ============ WHOLESALE ============ -->
+    <section class="wholesale reveal">
+      <div class="wholesale__inner">
+        <div>
+          <h2>Reselling? Let's talk numbers.</h2>
+          <p>Bulk pricing, consistent supply, and products your competitors don't have yet. First-to-market stock means first-to-market margins.</p>
+        </div>
+        <a class="btn btn--gold magnetic" data-wa="Hi ZGI, I'm interested in wholesale pricing." target="_blank" rel="noopener">Get Wholesale Pricing</a>
+      </div>
+    </section>
+
+    <div class="transit transit--rev" data-transit aria-hidden="true"><span class="transit__dot"></span></div>
+
+    <!-- ============ FOUNDERS ============ -->
+    <section class="founders" id="founders">
+      <header class="section-head">
+        <span class="section-head__kicker">The People Behind ZGI</span>
+        <h2 class="reveal">Two founders. One obsession.</h2>
+        <p class="section-head__lead reveal">Two young founders who got tired of watching Kenyans overpay for low-quality products — so they built a company that searches the world for the things worth bringing home.</p>
+      </header>
+      <div class="founders__grid">
+        <article class="founder reveal-l">
+          <div class="founder__photo"><img src="assets/img/founder-james.jpg" alt="James, Co-Founder &amp; CEO" loading="lazy" /></div>
+          <div class="founder__info"><h3>James</h3><span class="founder__role">Co-Founder &amp; CEO</span>
+            <p>Runs operations and supplier relationships — makes sure every shipment clears and every product performs.</p>
+            <a class="btn btn--wa btn--sm founder__wa magnetic" data-wa="Hi James 👋 I'm reaching out from the ZGI website." data-wa-to="james" target="_blank" rel="noopener"><span class="wa-ico"></span> WhatsApp James</a></div>
+        </article>
+        <article class="founder founder--flip reveal-r">
+          <div class="founder__photo"><img src="assets/img/founder-steve.jpg" alt="Steven, Co-Founder &amp; President" loading="lazy" /></div>
+          <div class="founder__info"><h3>Steven</h3><span class="founder__role">Co-Founder &amp; President</span>
+            <p>Leads product discovery and growth — hunts the next thing Kenya hasn't seen yet.</p>
+            <a class="btn btn--wa btn--sm founder__wa magnetic" data-wa="Hi Steven 👋 I'm reaching out from the ZGI website." data-wa-to="steven" target="_blank" rel="noopener"><span class="wa-ico"></span> WhatsApp Steven</a></div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ============ FAQ ============ -->
+    <section class="faq" id="faq">
+      <header class="section-head">
+        <span class="section-head__kicker">Before You Message</span>
+        <h2 class="reveal">Quick answers.</h2>
+      </header>
+      <div class="faq__list">
+        <details class="faq__item"><summary>How do I pay?</summary><p>Pay on delivery within our delivery zone — inspect the product, then pay by cash or M-Pesa. For sourced or out-of-zone orders we confirm terms on WhatsApp first.</p></details>
+        <details class="faq__item"><summary>Do you deliver outside Nairobi?</summary><p>Yes — Nairobi is same/next-day, and we ship countrywide via courier. Message us your location and we'll confirm the option and timing.</p></details>
+        <details class="faq__item"><summary>How long does custom sourcing take?</summary><p>Most sourced products land in roughly 2–4 weeks depending on item and origin. You get a landed, all-in quote before we order.</p></details>
+        <details class="faq__item"><summary>What if the product arrives damaged?</summary><p>You inspect before you pay, so you never accept a damaged item. If a fault develops later, message us — we replace or refund per the terms confirmed at order.</p></details>
+        <details class="faq__item"><summary>What's the minimum order for wholesale?</summary><p>Wholesale tiers vary by product. Tell us the item and volume and we'll send the bulk pricing.</p></details>
+      </div>
+    </section>
+
+    <!-- ============ FINAL CTA ============ -->
+    <section class="final">
+      <div class="final__inner reveal">
+        <h2>Ready to get the good stuff?</h2>
+        <p>Order a product, ask for wholesale pricing, or send us something to source. One message is all it takes.</p>
+        <a class="btn btn--wa btn--big magnetic" data-wa="Hi Zenith Global Imports 👋 I'd like to place an order / ask a question." target="_blank" rel="noopener"><span class="wa-ico"></span> Message Us on WhatsApp</a>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="footer">
+    <p class="footer__statement reveal">The best products aren't always the most expensive.<br />They're the ones worth bringing home.</p>
+    <div class="footer__row">
+      <div class="footer__brand">
+        <span class="wordmark wordmark--sm">
+          <span class="wordmark__top">ZENITH</span><span class="wordmark__sub">GLOBAL IMPORTS</span>
+        </span>
+        <p class="footer__tag">Connecting Kenya to the world's best.</p>
+      </div>
+      <div class="footer__meta">
+        <p>Nairobi, Kenya</p>
+        <div class="footer__social" id="footerSocial"></div>
+        <a class="btn btn--wa btn--sm magnetic" data-wa="Hi ZGI 👋" target="_blank" rel="noopener"><span class="wa-ico"></span> WhatsApp</a>
+      </div>
+    </div>
+    <p class="footer__copy">© <span id="year"></span> Zenith Global Imports. Worldwide &rarr; Kenya · First to Market.</p>
+  </footer>
+
+  <a class="fab-wa magnetic" data-wa="Hi Zenith Global Imports 👋" target="_blank" rel="noopener" aria-label="WhatsApp us"><span class="wa-ico wa-ico--lg"></span></a>
+
+  <script src="assets/js/main.js"></script>
+</body>
+</html>
