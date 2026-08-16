@@ -226,3 +226,19 @@ def test_create_blank_workbook_is_immediately_loadable(tmp_path):
     snap = store.load()
     assert snap.counts["employees"] == 0
     assert snap.problems == []
+
+
+def test_missing_join_date_is_reported_without_forcing_needs_review(tmp_path):
+    """Actionable for the client, but someone with issuance history is still judgeable."""
+    from openpyxl import load_workbook as _lw
+    path = clean_workbook(tmp_path / "w.xlsx")
+    wb = _lw(path)
+    wb["Employees"].cell(row=2, column=7).value = None  # E001 loses its join date
+    wb.save(path)
+    wb.close()
+
+    store = WorkbookStore(path, backup_dir=tmp_path / "bak")
+    store.load()
+    assert store.snapshot.employees["E001"].join_date is None
+    assert store.snapshot.employees["E001"].problems == ()
+    assert any("no join date" in p.message for p in store.snapshot.problems)

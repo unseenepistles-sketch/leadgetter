@@ -18,12 +18,13 @@
     <h2>Workbook</h2>
     <dl class="kv">
       <dt>File</dt><dd>{{ store_path }}</dd>
-      <dt>Employees</dt><dd>{{ store.counts.employees }}</dd>
-      <dt>Issuance rows</dt><dd>{{ store.counts.issuances }}</dd>
-      <dt>Uniform items</dt><dd>{{ store.counts.items }}</dd>
+      {# Bracket syntax throughout: `counts.items` would resolve to dict.items(). #}
+      <dt>Employees</dt><dd>{{ store.counts['employees'] }}</dd>
+      <dt>Issuance rows</dt><dd>{{ store.counts['issuances'] }}</dd>
+      <dt>Uniform items</dt><dd>{{ store.counts['items'] }}</dd>
       <dt>Unsaved rows</dt><dd>{{ pending_writes }}</dd>
       {% if last_write_error %}<dt>Write error</dt><dd style="color:var(--over)">{{ last_write_error }}</dd>{% endif %}
-      <dt>Data problems</dt><dd><a href="/data-quality">{{ store.counts.problems }}</a></dd>
+      <dt>Data problems</dt><dd><a href="/data-quality">{{ store.counts['problems'] }}</a></dd>
     </dl>
     <form method="post" action="/workbook/reload" style="margin-top:14px">
       <button class="ghost" type="submit">Reload from file</button>

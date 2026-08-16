@@ -390,6 +390,17 @@ class WorkbookStore:
             join = parse_date(raw_join, dayfirst=self.dayfirst)
             if join is None and raw_join not in (None, ""):
                 problems.append(f"unreadable join date {raw_join!r}")
+            elif join is None:
+                # Reported so the client can fix it, but not attached to the
+                # employee: someone with a full issuance history is still
+                # judgeable without a join date, and should not be forced into
+                # needs_review.
+                snap.problems.append(
+                    SheetProblem(
+                        schema.EMPLOYEES_SHEET, number,
+                        f"{emp_no}: no join date — items never issued cannot be dated",
+                    )
+                )
 
             sizes = {}
             for field_name, key in schema.SIZE_FIELDS.items():
