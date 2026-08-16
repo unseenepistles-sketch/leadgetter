@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Data quality</h1>
+<p class="sub">{{ problems | length }} row(s) in the workbook could not be read cleanly.
+   These are excluded from reminders rather than guessed at.</p>
+
+<div class="panel scroll">
+<table>
+  <thead><tr><th>Sheet</th><th>Row</th><th>Problem</th></tr></thead>
+  <tbody>
+  {% for p in problems %}
+    <tr><td>{{ p.sheet }}</td><td>{{ p.row or '—' }}</td><td>{{ p.message }}</td></tr>
+  {% else %}
+    <tr><td colspan="3" class="muted">No problems found — the workbook reads cleanly.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

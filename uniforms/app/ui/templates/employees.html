@@ -1,0 +1,38 @@
+{% extends "base.html" %}{% from "_macros.html" import pager %}
+{% block body %}
+<h1>Employees</h1>
+<p class="sub">{{ page.total }} matching</p>
+
+<form class="filters" method="get">
+  <div><label>Search</label><input name="q" value="{{ q or '' }}" placeholder="Name or number"></div>
+  <div><label>Department</label><select name="department">
+    <option value="">All</option>
+    {% for d in departments %}<option value="{{ d }}" {{ 'selected' if d == department }}>{{ d }}</option>{% endfor %}
+  </select></div>
+  <div><label>&nbsp;</label><label style="display:flex;gap:6px;align-items:center;color:var(--ink)">
+    <input type="checkbox" name="active_only" value="1" {{ 'checked' if active_only }}> Active only</label></div>
+  <button type="submit">Filter</button>
+</form>
+
+<div class="panel scroll">
+<table>
+  <thead><tr><th>Number</th><th>Name</th><th>Department</th><th>Role</th><th>Joined</th><th>Status</th><th>Outstanding</th></tr></thead>
+  <tbody>
+  {% for e in page.items %}
+    <tr>
+      <td><a href="/employees/{{ e.employee_number }}">{{ e.employee_number }}</a></td>
+      <td>{{ e.full_name }}</td>
+      <td>{{ e.department or '—' }}</td>
+      <td>{{ e.role or '—' }}</td>
+      <td>{{ e.join_date.strftime('%d %b %Y') if e.join_date else '—' }}</td>
+      <td>{{ e.status.value }}</td>
+      <td class="right">{{ outstanding.get(e.employee_number, 0) or '' }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" class="muted">No employees match.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{{ pager(page, base_url) }}
+{% endblock %}

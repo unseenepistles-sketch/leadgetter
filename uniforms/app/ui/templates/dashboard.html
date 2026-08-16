@@ -1,0 +1,45 @@
+{% extends "base.html" %}{% from "_macros.html" import status_pill %}
+{% block body %}
+<h1>Uniform tracking</h1>
+<p class="sub">{{ counts.employees }} active employees &middot; workbook loaded
+  {{ store.loaded_at.strftime('%d %b %Y at %H:%M') if store.loaded_at else 'never' }}</p>
+
+<div class="tiles">
+  <a class="tile" href="/reports?state=never_issued"><div class="n">{{ counts.never_issued }}</div><div class="l">Never issued</div></a>
+  <a class="tile" href="/reports?state=overdue"><div class="n">{{ counts.overdue }}</div><div class="l">Overdue</div></a>
+  <a class="tile" href="/reports?state=due"><div class="n">{{ counts.due }}</div><div class="l">Due now</div></a>
+  <a class="tile" href="/reports?state=due_soon"><div class="n">{{ counts.due_soon }}</div><div class="l">Due within 6 months</div></a>
+  <a class="tile" href="/reports?state=ok"><div class="n">{{ counts.ok }}</div><div class="l">Up to date</div></a>
+  <a class="tile" href="/data-quality"><div class="n">{{ counts.needs_review }}</div><div class="l">Needs review</div></a>
+</div>
+
+<div class="grid2">
+  <div class="panel">
+    <h2>Workbook</h2>
+    <dl class="kv">
+      <dt>File</dt><dd>{{ store_path }}</dd>
+      <dt>Employees</dt><dd>{{ store.counts.employees }}</dd>
+      <dt>Issuance rows</dt><dd>{{ store.counts.issuances }}</dd>
+      <dt>Uniform items</dt><dd>{{ store.counts.items }}</dd>
+      <dt>Unsaved rows</dt><dd>{{ pending_writes }}</dd>
+      {% if last_write_error %}<dt>Write error</dt><dd style="color:var(--over)">{{ last_write_error }}</dd>{% endif %}
+      <dt>Data problems</dt><dd><a href="/data-quality">{{ store.counts.problems }}</a></dd>
+    </dl>
+    <form method="post" action="/workbook/reload" style="margin-top:14px">
+      <button class="ghost" type="submit">Reload from file</button>
+    </form>
+  </div>
+
+  <div class="panel">
+    <h2>Reminders</h2>
+    <dl class="kv">
+      {% for k, v in reminder_counts.items() %}<dt>{{ k }}</dt><dd>{{ v }}</dd>{% endfor %}
+      {% if not reminder_counts %}<dt>Sent</dt><dd>none yet</dd>{% endif %}
+      <dt>Live sending</dt><dd>{{ 'on' if live else 'off (dry run)' }}</dd>
+    </dl>
+    <form method="post" action="/reminders/run" style="margin-top:14px">
+      <button class="ghost" name="dry_run" value="1" type="submit">Preview run (sends nothing)</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

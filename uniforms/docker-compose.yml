@@ -1,0 +1,10 @@
+services:
+  uniforms:
+    build: .
+    ports: ["8000:8000"]
+    env_file: .env
+    volumes:
+      # The workbook lives on a mounted volume so it survives container restarts
+      # and can point at a network share holding the client's real file.
+      - ./data:/app/data
+    restart: unless-stopped

@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ brand }}{% endblock %}</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #fff; --ink: #1a1d21; --muted: #6b7280;
+    --line: #e3e6ea; --accent: #1f5fbf;
+    --ok: #167a4a; --ok-bg: #e6f5ed;
+    --soon: #8a6100; --soon-bg: #fdf3dc;
+    --due: #9a4b00; --due-bg: #fdeddb;
+    --over: #a1201b; --over-bg: #fbe6e5;
+    --never: #6b21a8; --never-bg: #f3e8fd;
+    --review: #4b5563; --review-bg: #eceef1;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;
+         background:var(--bg); color:var(--ink); }
+  a { color:var(--accent); }
+  header { background:var(--panel); border-bottom:1px solid var(--line); padding:0 20px; }
+  nav { display:flex; gap:20px; align-items:center; max-width:1200px; margin:0 auto; }
+  nav .brand { font-weight:650; padding:14px 0; margin-right:8px; }
+  nav a { padding:14px 0; text-decoration:none; color:var(--muted); border-bottom:2px solid transparent; }
+  nav a:hover { color:var(--ink); }
+  nav a.on { color:var(--ink); border-bottom-color:var(--accent); }
+  main { max-width:1200px; margin:24px auto; padding:0 20px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  h2 { font-size:16px; margin:0 0 12px; }
+  .sub { color:var(--muted); margin:0 0 20px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:18px; }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:20px; }
+  .tile { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; text-decoration:none; color:inherit; display:block; }
+  .tile:hover { border-color:var(--accent); }
+  .tile .n { font-size:28px; font-weight:650; line-height:1.1; }
+  .tile .l { color:var(--muted); font-size:13px; margin-top:4px; }
+  .scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th,td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  tbody tr:hover { background:#fafbfc; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:99px; font-size:12px; font-weight:600; }
+  .s-ok{color:var(--ok);background:var(--ok-bg)} .s-due_soon{color:var(--soon);background:var(--soon-bg)}
+  .s-due{color:var(--due);background:var(--due-bg)} .s-overdue{color:var(--over);background:var(--over-bg)}
+  .s-never_issued{color:var(--never);background:var(--never-bg)} .s-needs_review{color:var(--review);background:var(--review-bg)}
+  form.filters { display:flex; gap:10px; flex-wrap:wrap; align-items:end; margin-bottom:16px; }
+  label { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+  input,select,textarea { font:inherit; padding:7px 9px; border:1px solid var(--line); border-radius:7px; background:#fff; }
+  button { font:inherit; padding:8px 15px; border:0; border-radius:7px; background:var(--accent); color:#fff; cursor:pointer; font-weight:550; }
+  button:hover { background:#1a52a6; }
+  button.ghost { background:#fff; color:var(--ink); border:1px solid var(--line); }
+  .pager { display:flex; gap:10px; align-items:center; margin-top:14px; color:var(--muted); font-size:14px; }
+  .flash { padding:11px 14px; border-radius:8px; margin-bottom:16px; font-size:14px; }
+  .flash.ok { background:var(--ok-bg); color:var(--ok); }
+  .flash.err { background:var(--over-bg); color:var(--over); }
+  .muted { color:var(--muted); }
+  .right { text-align:right; }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; }
+  .checks { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:8px; }
+  .checks label { display:flex; gap:8px; align-items:center; font-size:14px; color:var(--ink); padding:9px 11px;
+                  border:1px solid var(--line); border-radius:8px; cursor:pointer; margin:0; }
+  .checks input { margin:0; }
+  dl.kv { display:grid; grid-template-columns:max-content 1fr; gap:6px 16px; margin:0; font-size:14px; }
+  dl.kv dt { color:var(--muted); }
+  dl.kv dd { margin:0; }
+</style>
+</head>
+<body>
+<header>
+  <nav>
+    <span class="brand">{{ brand }}</span>
+    <a href="/" class="{{ 'on' if active=='dashboard' }}">Dashboard</a>
+    <a href="/employees" class="{{ 'on' if active=='employees' }}">Employees</a>
+    <a href="/issue" class="{{ 'on' if active=='issue' }}">Issue</a>
+    <a href="/reports" class="{{ 'on' if active=='reports' }}">Reports</a>
+    <a href="/data-quality" class="{{ 'on' if active=='dq' }}">Data quality</a>
+  </nav>
+</header>
+<main>
+  {% if request.query_params.get('ok') %}<div class="flash ok">{{ request.query_params.get('ok') }}</div>{% endif %}
+  {% if request.query_params.get('err') %}<div class="flash err">{{ request.query_params.get('err') }}</div>{% endif %}
+  {% block body %}{% endblock %}
+</main>
+</body>
+</html>

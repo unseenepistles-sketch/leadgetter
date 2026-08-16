@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Issue uniforms</h1>
+<p class="sub">Record a handover for one person, or the same kit for a whole intake.</p>
+
+<form method="post" action="/issue" class="panel">
+  <h2>Bulk issue</h2>
+  <div style="margin-bottom:14px">
+    <label>Items</label>
+    <div class="checks">
+      {% for item in items %}
+      <label><input type="checkbox" name="item_codes" value="{{ item.item_code }}">
+        {{ item.name }} <span class="muted">({{ item.renewal_cycle_months }}m)</span></label>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:14px">
+    <div><label>Date</label><input type="date" name="issued_date" value="{{ today }}"></div>
+    <div><label>Issued by</label><input name="issued_by" placeholder="Your name"></div>
+    <div><label>Notes</label><input name="notes" placeholder="Optional"></div>
+  </div>
+
+  <label>Employees <span class="muted">— sizes are taken from each person's profile</span></label>
+  <div class="checks" style="max-height:340px;overflow:auto;padding:4px">
+    {% for e in employees %}
+    <label><input type="checkbox" name="employee_numbers" value="{{ e.employee_number }}">
+      {{ e.full_name }} <span class="muted">{{ e.employee_number }}</span></label>
+    {% endfor %}
+  </div>
+
+  <div style="margin-top:16px"><button type="submit">Record handovers</button></div>
+</form>
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "base.html" %}{% from "_macros.html" import status_pill, pager, due_cell %}
+{% block body %}
+<h1>{{ title }}</h1>
+<p class="sub">{{ page.total }} row(s)</p>
+
+<form class="filters" method="get">
+  <div><label>Status</label><select name="state">
+    {% for value, label in states %}<option value="{{ value }}" {{ 'selected' if value == state }}>{{ label }}</option>{% endfor %}
+  </select></div>
+  <div><label>Department</label><select name="department">
+    <option value="">All</option>
+    {% for d in departments %}<option value="{{ d }}" {{ 'selected' if d == department }}>{{ d }}</option>{% endfor %}
+  </select></div>
+  <button type="submit">Filter</button>
+</form>
+
+<div class="panel scroll">
+<table>
+  <thead><tr><th>Employee</th><th>Number</th><th>Item</th><th>Qty</th><th>Last issued</th><th>Next due</th><th>Status</th></tr></thead>
+  <tbody>
+  {% for s in page.items %}
+    <tr>
+      <td><a href="/employees/{{ s.employee_number }}">{{ s.employee_name }}</a></td>
+      <td>{{ s.employee_number }}</td>
+      <td>{{ s.item_name }}</td>
+      <td>{{ s.quantity }}</td>
+      <td>{{ s.last_issued.strftime('%d %b %Y') if s.last_issued else '—' }}</td>
+      <td>{{ due_cell(s) }}</td>
+      <td>{{ status_pill(s.status.value) }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" class="muted">Nothing to show.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{{ pager(page, base_url) }}
+{% endblock %}

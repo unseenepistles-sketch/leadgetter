@@ -1,0 +1,82 @@
+{% extends "base.html" %}{% from "_macros.html" import status_pill, due_cell %}
+{% block title %}{{ employee.full_name }}{% endblock %}
+{% block body %}
+<h1>{{ employee.full_name }}</h1>
+<p class="sub">{{ employee.employee_number }} &middot; {{ employee.role or 'no role' }}
+   &middot; {{ employee.department or 'no department' }}</p>
+
+{% if employee.problems %}
+<div class="flash err">This record needs review: {{ employee.problems | join('; ') }}</div>
+{% endif %}
+
+<div class="grid2">
+  <div class="panel">
+    <h2>Details</h2>
+    <dl class="kv">
+      <dt>Email</dt><dd>{{ employee.email or '—' }}</dd>
+      <dt>Manager</dt><dd>{{ employee.manager_email or '—' }}</dd>
+      <dt>Joined</dt><dd>{{ employee.join_date.strftime('%d %b %Y') if employee.join_date else '—' }}</dd>
+      <dt>Status</dt><dd>{{ employee.status.value }}</dd>
+      {% for k, v in employee.sizes.items() %}<dt>{{ k | capitalize }} size</dt><dd>{{ v }}</dd>{% endfor %}
+    </dl>
+  </div>
+  <div class="panel">
+    <h2>Issue a uniform</h2>
+    <form method="post" action="/issue">
+      <input type="hidden" name="employee_number" value="{{ employee.employee_number }}">
+      <div class="checks" style="margin-bottom:12px">
+        {% for s in statuses %}
+        <label><input type="checkbox" name="item_codes" value="{{ s.item_code }}"
+                {{ 'checked' if s.is_outstanding }}>
+          {{ s.item_name }}{% if s.size %} <span class="muted">({{ s.size }})</span>{% endif %}</label>
+        {% endfor %}
+      </div>
+      <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+        <div><label>Date</label><input type="date" name="issued_date" value="{{ today }}"></div>
+        <div><label>Issued by</label><input name="issued_by" placeholder="Your name"></div>
+        <button type="submit">Record handover</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="panel scroll">
+  <h2>Entitlements and status</h2>
+  <table>
+    <thead><tr><th>Item</th><th>Qty</th><th>Cycle</th><th>Last issued</th><th>Next due</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for s in statuses %}
+      <tr>
+        <td>{{ s.item_name }}</td>
+        <td>{{ s.quantity }}</td>
+        <td>{{ s.cycle_months }} months</td>
+        <td>{{ s.last_issued.strftime('%d %b %Y') if s.last_issued else '—' }}</td>
+        <td>{{ due_cell(s) }}</td>
+        <td>{{ status_pill(s.status.value) }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="muted">No entitlements found for this role.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="panel scroll">
+  <h2>Issuance history</h2>
+  <table>
+    <thead><tr><th>Date</th><th>Item</th><th>Qty</th><th>Size</th><th>Issued by</th><th>Notes</th></tr></thead>
+    <tbody>
+    {% for i in issuances %}
+      <tr>
+        <td>{{ i.issued_date.strftime('%d %b %Y') }}</td>
+        <td>{{ i.item_code }}</td><td>{{ i.quantity }}</td>
+        <td>{{ i.size or '—' }}</td><td>{{ i.issued_by or '—' }}</td>
+        <td>{{ i.notes or '' }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="muted">Nothing has ever been issued to this employee.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

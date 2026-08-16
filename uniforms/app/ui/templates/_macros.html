@@ -1,0 +1,17 @@
+{% macro status_pill(s) %}<span class="pill s-{{ s }}">{{ s.replace('_',' ') }}</span>{% endmacro %}
+
+{% macro pager(page, base) %}
+<div class="pager">
+  {% if page.page > 1 %}<a href="{{ base }}page={{ page.page - 1 }}">&larr; Previous</a>{% endif %}
+  <span>Page {{ page.page }} of {{ page.pages }} &middot; {{ page.total }} row(s)</span>
+  {% if page.page < page.pages %}<a href="{{ base }}page={{ page.page + 1 }}">Next &rarr;</a>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro due_cell(s) %}
+  {% if s.next_due %}{{ s.next_due.strftime('%d %b %Y') }}
+    {% if s.days_until_due is not none %}
+      <span class="muted">({{ s.days_until_due }}d)</span>
+    {% endif %}
+  {% else %}<span class="muted">&mdash;</span>{% endif %}
+{% endmacro %}
