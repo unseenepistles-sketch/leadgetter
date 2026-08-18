@@ -15,3 +15,5 @@
     {% endif %}
   {% else %}<span class="muted">&mdash;</span>{% endif %}
 {% endmacro %}
+
+{% macro order_pill(s) %}<span class="pill o-{{ s }}">{{ s.replace('_',' ') }}</span>{% endmacro %}

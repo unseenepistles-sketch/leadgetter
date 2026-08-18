@@ -11,6 +11,7 @@ EMPLOYEES_SHEET = "Employees"
 ITEMS_SHEET = "UniformItems"
 ENTITLEMENTS_SHEET = "Entitlements"
 ISSUANCES_SHEET = "Issuances"
+ORDERS_SHEET = "Orders"
 
 #: Sheet name aliases, so we find the right tab whatever they called it.
 SHEET_ALIASES: dict[str, tuple[str, ...]] = {
@@ -20,6 +21,8 @@ SHEET_ALIASES: dict[str, tuple[str, ...]] = {
     ISSUANCES_SHEET: ("issuances", "issuance", "issued", "issues", "log", "records", "distribution",
                       "issue log", "issuelog", "issue record", "issue records", "uniform log",
                       "issued items", "handover", "handovers"),
+    ORDERS_SHEET: ("orders", "order", "orders log", "orderlog", "order log", "ordered",
+                   "purchase", "purchases", "requisitions", "requisition"),
 }
 
 EMPLOYEE_COLUMNS = (
@@ -68,18 +71,42 @@ ISSUANCE_COLUMNS = (
     Column("issued_by", ("issued by", "given by", "storekeeper", "handled by", "officer")),
     Column("cycle_months", ("cycle months", "renewal cycle months", "cycle")),
     Column("notes", ("notes", "note", "remarks", "comment", "comments")),
+    Column("order_id", ("order id", "order", "order ref", "order reference", "orderid")),
+)
+
+ORDER_COLUMNS = (
+    Column("order_id", ("order id", "orderid", "order", "id", "reference", "ref"), required=True),
+    Column("employee_number", ("employee number", "employee no", "staff id", "staff no",
+                               "emp no", "employee id", "payroll number", "id"), required=True),
+    Column("item_code", ("item code", "code", "item", "sku", "uniform item"), required=True),
+    Column("ordered_date", ("ordered date", "order date", "date ordered", "ordered", "date"),
+           required=True),
+    Column("quantity", ("quantity", "qty", "number", "count", "ordered qty")),
+    Column("supplier_ref", ("supplier ref", "supplier reference", "supplier", "po", "po number")),
+    Column("notes", ("notes", "note", "remarks", "comment", "comments")),
+    Column("cancelled", ("cancelled", "canceled", "void", "voided")),
 )
 
 #: Column order used when this app creates a workbook from scratch, and when it
 #: appends a row to an existing sheet that lacks one of these headers.
 ISSUANCE_WRITE_ORDER = (
     "employee_number", "item_code", "issued_date", "quantity", "size",
-    "issued_by", "cycle_months", "notes",
+    "issued_by", "cycle_months", "order_id", "notes",
 )
 
 ISSUANCE_HEADERS = (
     "Employee Number", "Item Code", "Issued Date", "Quantity", "Size",
-    "Issued By", "Cycle Months", "Notes",
+    "Issued By", "Cycle Months", "Order ID", "Notes",
+)
+
+ORDER_WRITE_ORDER = (
+    "order_id", "employee_number", "item_code", "ordered_date", "quantity",
+    "supplier_ref", "cancelled", "notes",
+)
+
+ORDER_HEADERS = (
+    "Order ID", "Employee Number", "Item Code", "Ordered Date", "Quantity",
+    "Supplier Ref", "Cancelled", "Notes",
 )
 
 EMPLOYEE_HEADERS = (

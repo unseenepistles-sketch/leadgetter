@@ -12,7 +12,7 @@ from typing import Optional
 from fastapi import APIRouter, Body, HTTPException, Query
 
 from ..deps import get_ledger, get_runner, get_service, get_store
-from ..domain.models import Employee, Issuance, ItemStatus
+from ..domain.models import ORDER_LABELS, Employee, Issuance, ItemStatus, OrderLine, OrderStatus
 from ..service import NotFound, ValidationError
 
 router = APIRouter(prefix="/api", tags=["api"])
@@ -52,6 +52,28 @@ def status_json(s: ItemStatus) -> dict:
     }
 
 
+def order_json(line: OrderLine) -> dict:
+    o = line.order
+    return {
+        "order_id": o.order_id,
+        "employee_number": o.employee_number,
+        "employee_name": line.employee_name,
+        "role": line.role,
+        "item_code": o.item_code,
+        "item_name": line.item_name,
+        "ordered_date": o.ordered_date.isoformat(),
+        "quantity": o.quantity,
+        "delivered": line.delivered,
+        "pending": line.pending,
+        "status": line.status.value,
+        "status_label": ORDER_LABELS[line.status],
+        "supplier_ref": o.supplier_ref,
+        "notes": o.notes,
+        "last_delivery": line.last_delivery.isoformat() if line.last_delivery else None,
+        "renewal_due": line.next_due.isoformat() if line.next_due else None,
+    }
+
+
 def issuance_json(i: Issuance) -> dict:
     return {
         "employee_number": i.employee_number,
@@ -61,6 +83,7 @@ def issuance_json(i: Issuance) -> dict:
         "size": i.size,
         "issued_by": i.issued_by,
         "cycle_months": i.cycle_months,
+        "order_id": i.order_id,
         "notes": i.notes,
     }
 
@@ -166,7 +189,8 @@ def dashboard_summary() -> dict:
     service = get_service()
     store = get_store()
     return {
-        "counts": service.summary(),
+        "counts": {**service.summary(), "pending_delivery": service.pending_delivery(),
+                   "open_orders": len(service.order_lines(open_only=True))},
         "workbook": {
             "path": str(store.path),
             "loaded_at": store.snapshot.loaded_at.isoformat() if store.snapshot.loaded_at else None,
@@ -240,6 +264,88 @@ def list_issuances(
         "per_page": per_page,
         "pages": max(1, -(-len(rows) // per_page)),
     }
+
+
+@router.get("/orders")
+def list_orders(
+    status: Optional[str] = Query(None, description="awaiting_delivery | partially_delivered | delivered"),
+    item: Optional[str] = None,
+    employee: Optional[str] = None,
+    open_only: bool = False,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=500),
+) -> dict:
+    try:
+        rows = get_service().order_lines(
+            status=status, item_code=item, employee_number=employee, open_only=open_only
+        )
+    except ValidationError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    start = (page - 1) * per_page
+    return {
+        "items": [order_json(r) for r in rows[start : start + per_page]],
+        "total": len(rows), "page": page, "per_page": per_page,
+        "pages": max(1, -(-len(rows) // per_page)),
+        "pending_pieces": get_service().pending_delivery(),
+    }
+
+
+@router.get("/orders/{order_id}")
+def get_order(order_id: str) -> dict:
+    try:
+        return order_json(get_service().order_line(order_id))
+    except NotFound as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@router.post("/orders", status_code=201)
+def create_order(payload: dict = Body(...)) -> dict:
+    """Place one order covering several items: 6 shirts and 3 trousers in one go."""
+    service = get_service()
+    try:
+        created = service.place_order(
+            payload["employee_number"],
+            payload.get("quantities") or {},
+            ordered_date=_date(payload.get("ordered_date")),
+            supplier_ref=payload.get("supplier_ref"),
+            notes=payload.get("notes"),
+        )
+    except KeyError as exc:
+        raise HTTPException(400, f"missing field: {exc.args[0]}") from exc
+    except NotFound as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {
+        "created": len(created),
+        "orders": [order_json(service.order_line(o.order_id)) for o in created],
+    }
+
+
+@router.post("/orders/{order_id}/deliveries", status_code=201)
+def receive_delivery(order_id: str, payload: dict = Body(default={})) -> dict:
+    """Book in what arrived. This is the handover — it starts the renewal clock."""
+    service = get_service()
+    try:
+        issuance = service.receive_delivery(
+            order_id,
+            quantity=payload.get("quantity"),
+            received_date=_date(payload.get("received_date")),
+            size=payload.get("size"),
+            received_by=payload.get("received_by"),
+            notes=payload.get("notes"),
+        )
+    except NotFound as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"issuance": issuance_json(issuance), "order": order_json(service.order_line(order_id))}
+
+
+@router.get("/action-needed")
+def action_needed(limit: int = Query(12, ge=1, le=100)) -> dict:
+    rows = get_service().action_needed(limit=limit)
+    return {"items": [{**r, "date": r["date"].isoformat() if r["date"] else None} for r in rows]}
 
 
 @router.get("/data-quality")

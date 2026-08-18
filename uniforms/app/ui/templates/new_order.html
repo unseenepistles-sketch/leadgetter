@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Log a new order</h1>
+<p class="sub">Set a quantity for each item you're ordering — 6 shirts and 3 trousers in one go.</p>
+
+<form method="post" action="/orders" class="panel">
+  <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px">
+    <div style="flex:1;min-width:260px">
+      <label>Staff member</label>
+      <select name="employee_number" required style="width:100%">
+        <option value="">Select a staff member…</option>
+        {% for e in employees %}
+        <option value="{{ e.employee_number }}" {{ 'selected' if e.employee_number == preselect }}>
+          {{ e.full_name }} — {{ e.role or 'no role' }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div><label>Order date</label><input type="date" name="ordered_date" value="{{ today }}"></div>
+    <div><label>Supplier ref</label><input name="supplier_ref" placeholder="PO number (optional)"></div>
+  </div>
+
+  <label>Items &amp; quantities</label>
+  <div class="qty-list">
+    {% for item in items %}
+    <div class="qty-row">
+      <span class="qty-name">{{ item.name }}</span>
+      <span class="muted qty-cycle">{{ item.renewal_cycle_months }} month renewal</span>
+      <span class="stepper">
+        <button type="button" class="step" data-step="-1" aria-label="Fewer {{ item.name }}">&minus;</button>
+        <input type="number" name="qty_{{ item.item_code }}" value="0" min="0" max="99"
+               aria-label="{{ item.name }} quantity">
+        <button type="button" class="step" data-step="1" aria-label="More {{ item.name }}">+</button>
+      </span>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div style="margin-top:14px">
+    <label>Notes (optional)</label>
+    <input name="notes" style="width:100%" placeholder="Sizes, supplier reference, or any other detail">
+  </div>
+
+  <div style="display:flex;gap:12px;align-items:center;margin-top:16px">
+    <span class="muted" id="tally">Nothing selected yet</span>
+    <span style="flex:1"></span>
+    <a href="/orders" class="muted" style="text-decoration:none">Cancel</a>
+    <button type="submit">Save order</button>
+  </div>
+</form>
+
+<script>
+(function () {
+  const rows = document.querySelectorAll(".qty-row");
+  const tally = document.getElementById("tally");
+  function refresh() {
+    let pieces = 0, types = 0;
+    rows.forEach(row => {
+      const input = row.querySelector("input");
+      const n = Math.max(0, parseInt(input.value || "0", 10));
+      if (n > 0) { pieces += n; types++; }
+      row.classList.toggle("on", n > 0);
+    });
+    tally.textContent = pieces
+      ? `${pieces} piece${pieces === 1 ? "" : "s"} across ${types} item type${types === 1 ? "" : "s"}`
+      : "Nothing selected yet";
+  }
+  rows.forEach(row => {
+    const input = row.querySelector("input");
+    row.querySelectorAll(".step").forEach(btn => btn.addEventListener("click", () => {
+      input.value = Math.max(0, (parseInt(input.value || "0", 10)) + Number(btn.dataset.step));
+      refresh();
+    }));
+    input.addEventListener("input", refresh);
+  });
+  refresh();
+})();
+</script>
+{% endblock %}

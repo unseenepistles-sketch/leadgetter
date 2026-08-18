@@ -17,6 +17,23 @@ class EmployeeStatus(str, Enum):
     LEFT = "left"
 
 
+class OrderStatus(str, Enum):
+    """Where an order stands between being placed and reaching the person."""
+
+    AWAITING = "awaiting_delivery"
+    PARTIAL = "partially_delivered"
+    DELIVERED = "delivered"
+    CANCELLED = "cancelled"
+
+
+ORDER_LABELS = {
+    OrderStatus.AWAITING: "Awaiting delivery",
+    OrderStatus.PARTIAL: "Partially delivered",
+    OrderStatus.DELIVERED: "Delivered",
+    OrderStatus.CANCELLED: "Cancelled",
+}
+
+
 class UniformStatus(str, Enum):
     """Where an employee stands on one entitled item."""
 
@@ -94,6 +111,9 @@ class Issuance:
     #: rewrite history.
     cycle_months: Optional[int] = None
     notes: Optional[str] = None
+    #: The order this delivery fulfils, when it came from one. Deliveries recorded
+    #: at the counter without a prior order simply leave it blank.
+    order_id: Optional[str] = None
     row: Optional[int] = None
 
 
@@ -117,3 +137,56 @@ class ItemStatus:
     @property
     def is_outstanding(self) -> bool:
         return self.status in OUTSTANDING
+
+
+@dataclass(frozen=True, slots=True)
+class Order:
+    """A request for uniform items. Fulfilled by one or more issuances.
+
+    Ordering and handing over are separate events, often weeks apart, and an
+    order frequently arrives in parts — two jackets ordered, one delivered. The
+    renewal clock deliberately runs from the issuance, not from this: the cycle
+    starts when the person actually has the garment.
+    """
+
+    order_id: str
+    employee_number: str
+    item_code: str
+    ordered_date: date
+    quantity: int = 1
+    supplier_ref: Optional[str] = None
+    notes: Optional[str] = None
+    cancelled: bool = False
+    row: Optional[int] = None
+
+
+@dataclass(frozen=True, slots=True)
+class OrderLine:
+    """An order plus what has actually arrived against it."""
+
+    order: Order
+    employee_name: str
+    role: Optional[str]
+    item_name: str
+    delivered: int
+    status: OrderStatus
+    last_delivery: Optional[date] = None
+    next_due: Optional[date] = None
+
+    @property
+    def pending(self) -> int:
+        return max(0, self.order.quantity - self.delivered)
+
+    @property
+    def is_open(self) -> bool:
+        return self.status in (OrderStatus.AWAITING, OrderStatus.PARTIAL)
+
+
+def order_status(quantity: int, delivered: int, cancelled: bool = False) -> OrderStatus:
+    if cancelled:
+        return OrderStatus.CANCELLED
+    if delivered <= 0:
+        return OrderStatus.AWAITING
+    if delivered < quantity:
+        return OrderStatus.PARTIAL
+    return OrderStatus.DELIVERED

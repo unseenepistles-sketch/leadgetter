@@ -17,7 +17,7 @@ from fastapi.templating import Jinja2Templates
 
 from ..config import get_settings
 from ..deps import get_ledger, get_runner, get_service, get_store
-from ..domain.models import UniformStatus
+from ..domain.models import ORDER_LABELS, OrderStatus, UniformStatus
 from ..service import NotFound, ValidationError
 
 log = logging.getLogger("uniforms.ui")
@@ -61,6 +61,9 @@ def dashboard(request: Request):
         last_write_error=store.last_write_error,
         reminder_counts=get_ledger().counts(),
         live=settings.sending_for_real,
+        pending_delivery=service.pending_delivery(),
+        open_orders=len(service.order_lines(open_only=True)),
+        actions=service.action_needed(limit=8),
     )
 
 
@@ -161,6 +164,90 @@ def issue_submit(
         ok=f"Recorded {len(created)} item(s) for {people} employee(s). "
            "Saving to the workbook in the background.",
     )
+
+
+ORDER_STATES = [("all", "All statuses")] + [(s.value, ORDER_LABELS[s]) for s in OrderStatus]
+
+
+@router.get("/orders")
+def orders(request: Request, status: str = "all", item: Optional[str] = None):
+    service = get_service()
+    try:
+        lines = service.order_lines(status=status, item_code=item)
+    except ValidationError:
+        status, lines = "all", service.order_lines(item_code=item)
+    return _render(
+        request, "orders.html", "orders",
+        lines=lines, status=status, item=item, statuses=ORDER_STATES,
+        items=[i for i in service.snapshot.items.values() if i.active],
+        pending=service.pending_delivery(),
+    )
+
+
+@router.get("/orders/new")
+def new_order_form(request: Request, employee: Optional[str] = None):
+    service = get_service()
+    return _render(
+        request, "new_order.html", "orders",
+        employees=sorted(
+            (e for e in service.snapshot.employees.values() if e.is_active),
+            key=lambda e: e.full_name.lower(),
+        ),
+        items=[i for i in service.snapshot.items.values() if i.active],
+        today=date.today().isoformat(), preselect=employee,
+    )
+
+
+@router.post("/orders")
+async def create_order(request: Request):
+    form = await request.form()
+    employee_number = (form.get("employee_number") or "").strip()
+    if not employee_number:
+        return _back("/orders/new", err="Choose a staff member first.")
+
+    quantities = {}
+    for key, value in form.items():
+        if key.startswith("qty_"):
+            try:
+                n = int(value or 0)
+            except ValueError:
+                n = 0
+            if n > 0:
+                quantities[key[4:]] = n
+
+    when = None
+    raw = form.get("ordered_date")
+    if raw:
+        try:
+            when = date.fromisoformat(raw)
+        except ValueError:
+            return _back("/orders/new", err=f"{raw!r} is not a valid date")
+
+    try:
+        created = get_service().place_order(
+            employee_number, quantities, ordered_date=when,
+            supplier_ref=form.get("supplier_ref") or None,
+            notes=form.get("notes") or None,
+        )
+    except (ValidationError, NotFound) as exc:
+        return _back("/orders/new", err=str(exc))
+
+    pieces = sum(o.quantity for o in created)
+    return _back("/orders", ok=f"Order placed: {pieces} piece(s) across {len(created)} item type(s).")
+
+
+@router.post("/orders/{order_id}/deliver")
+async def deliver_order(order_id: str, request: Request):
+    form = await request.form()
+    try:
+        qty = int(form.get("quantity") or 0) or None
+    except ValueError:
+        qty = None
+    try:
+        get_service().receive_delivery(order_id, quantity=qty, received_by=form.get("received_by"))
+    except (ValidationError, NotFound) as exc:
+        return _back("/orders", err=str(exc))
+    return _back("/orders", ok="Delivery booked in. The renewal clock starts from today.")
 
 
 @router.get("/reports")

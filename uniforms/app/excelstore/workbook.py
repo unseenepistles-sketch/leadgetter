@@ -36,6 +36,7 @@ from ..domain.models import (
     EmployeeStatus,
     Entitlement,
     Issuance,
+    Order,
     UniformItem,
 )
 from . import fast_append, schema
@@ -76,6 +77,7 @@ class Snapshot:
     items: dict[str, UniformItem] = field(default_factory=dict)
     entitlements: dict[str, list[Entitlement]] = field(default_factory=dict)
     issuances: dict[str, list[Issuance]] = field(default_factory=dict)
+    orders: dict[str, Order] = field(default_factory=dict)
     problems: list[SheetProblem] = field(default_factory=list)
     loaded_at: Optional[datetime] = None
     source_mtime: float = 0.0
@@ -89,6 +91,22 @@ class Snapshot:
     def issuances_for(self, employee_number: str) -> list[Issuance]:
         return list(self.issuances.get(employee_number, ()))
 
+    def orders_for(self, employee_number: str) -> list[Order]:
+        return [o for o in self.orders.values() if o.employee_number == employee_number]
+
+    def delivered_against(self, order_id: str) -> int:
+        """How much of an order has actually reached the person.
+
+        Summed from issuance rows rather than stored on the order, so a partial
+        delivery is never a number someone has to remember to update.
+        """
+        total = 0
+        for rows in self.issuances.values():
+            for iss in rows:
+                if iss.order_id == order_id:
+                    total += iss.quantity
+        return total
+
     @property
     def counts(self) -> dict[str, int]:
         return {
@@ -96,6 +114,7 @@ class Snapshot:
             "items": len(self.items),
             "entitlement_rules": sum(len(v) for v in self.entitlements.values()),
             "issuances": sum(len(v) for v in self.issuances.values()),
+            "orders": len(self.orders),
             "problems": len(self.problems),
         }
 
@@ -118,7 +137,8 @@ class WorkbookStore:
 
         self._lock = threading.RLock()
         self._snapshot = Snapshot()
-        self._pending: list[Issuance] = []
+        #: (canonical sheet, field -> value) awaiting a flush.
+        self._pending: list[tuple[str, dict[str, Any]]] = []
         self._flush_thread: Optional[threading.Thread] = None
         self._flush_requested = threading.Event()
         self._stopping = threading.Event()
@@ -184,19 +204,24 @@ class WorkbookStore:
 
     def append_issuance(self, issuance: Issuance) -> Issuance:
         """Record a handover: visible immediately, on disk shortly after."""
-        with self._lock:
-            self._snapshot.issuances.setdefault(issuance.employee_number, []).append(issuance)
-            self._pending.append(issuance)
-        self.request_flush()
-        return issuance
+        return self.append_issuances([issuance]) and issuance
 
     def append_issuances(self, issuances: Sequence[Issuance]) -> int:
         with self._lock:
             for iss in issuances:
                 self._snapshot.issuances.setdefault(iss.employee_number, []).append(iss)
-            self._pending.extend(issuances)
+                self._pending.append((schema.ISSUANCES_SHEET, _issuance_values(iss)))
         self.request_flush()
         return len(issuances)
+
+    def append_orders(self, orders: Sequence[Order]) -> int:
+        """Place orders: an intent to obtain, not yet a handover."""
+        with self._lock:
+            for order in orders:
+                self._snapshot.orders[order.order_id] = order
+                self._pending.append((schema.ORDERS_SHEET, _order_values(order)))
+        self.request_flush()
+        return len(orders)
 
     def request_flush(self) -> None:
         self._flush_requested.set()
@@ -255,9 +280,12 @@ class WorkbookStore:
 
         self._backup()
         try:
-            written = self._flush_fast(batch)
-            if not written:
-                self._flush_openpyxl(batch)
+            grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+            for sheet, values in batch:
+                grouped[sheet].append(values)
+            for sheet, rows in grouped.items():
+                if not self._flush_fast(sheet, rows):
+                    self._flush_openpyxl(sheet, rows)
         except WorkbookError:
             raise
         except PermissionError as exc:
@@ -275,20 +303,24 @@ class WorkbookStore:
         log.info("wrote %s issuance row(s) to %s", len(batch), self.path.name)
         return len(batch)
 
-    def _flush_fast(self, batch: Sequence[Issuance]) -> int:
+    def _flush_fast(self, sheet: str, rows: Sequence[dict[str, Any]]) -> int:
         """Splice rows straight into the sheet XML. Returns 0 if not applicable."""
         try:
-            sheet_title, order = self._issuance_layout()
+            title, order = self._layout(sheet)
         except WorkbookError:
             raise
         except Exception as exc:
             log.info("fast append unavailable (%s); using openpyxl", exc)
             return 0
-        if sheet_title is None:
+        if title is None:
+            return 0
+        missing = _unwritable(rows, order)
+        if missing:
+            log.info("%s has no column for %s; using openpyxl to add it", title, ", ".join(missing))
             return 0
         try:
             return fast_append.append_rows(
-                self.path, sheet_title, [_issuance_row(i, order) for i in batch]
+                self.path, title, [_row_for(v, order) for v in rows]
             )
         except PermissionError:
             raise
@@ -296,29 +328,33 @@ class WorkbookStore:
             log.info("fast append not supported for this workbook (%s)", exc)
             return 0
 
-    def _issuance_layout(self) -> tuple[Optional[str], list[str]]:
-        """The issuance sheet's real title and its column order, read cheaply."""
+    def _layout(self, sheet: str) -> tuple[Optional[str], list[str]]:
+        """A sheet's real title and column order, read cheaply."""
         wb = load_workbook(self.path, read_only=True)
         try:
-            ws = _find_sheet(wb, schema.ISSUANCES_SHEET)
+            ws = _find_sheet(wb, sheet)
             if ws is None:
                 return None, []
-            return ws.title, _append_order(ws, create_if_missing=False)
+            return ws.title, _append_order(ws, sheet, create_if_missing=False)
         finally:
             wb.close()
 
-    def _flush_openpyxl(self, batch: Sequence[Issuance]) -> None:
+    def _flush_openpyxl(self, sheet: str, rows: Sequence[dict[str, Any]]) -> None:
         """The dependable path: full load, append, atomic replace."""
         tmp = self.path.with_name(f".{self.path.stem}.writing.xlsx")
         try:
             wb = load_workbook(self.path)
-            ws = _find_sheet(wb, schema.ISSUANCES_SHEET)
+            ws = _find_sheet(wb, sheet)
             if ws is None:
-                ws = wb.create_sheet(schema.ISSUANCES_SHEET)
-                ws.append(list(schema.ISSUANCE_HEADERS))
-            order = _append_order(ws)
-            for iss in batch:
-                ws.append(_issuance_row(iss, order))
+                ws = wb.create_sheet(sheet)
+                ws.append(list(_SPEC[sheet][2]))
+            order = _append_order(ws, sheet)
+            for field_name in _unwritable(rows, order):
+                order.append(field_name)
+                ws.cell(row=1, column=len(order),
+                        value=_LABELS[sheet].get(field_name, field_name))
+            for values in rows:
+                ws.append(_row_for(values, order))
             wb.save(tmp)
             wb.close()
             os.replace(tmp, self.path)
@@ -348,6 +384,7 @@ class WorkbookStore:
         self._parse_items(wb, snap)
         self._parse_entitlements(wb, snap)
         self._parse_issuances(wb, snap)
+        self._parse_orders(wb, snap)
         return snap
 
     def _rows(
@@ -497,10 +534,51 @@ class WorkbookStore:
                     issued_by=parse_text(cell(row, mapping, "issued_by")),
                     cycle_months=parse_int(cell(row, mapping, "cycle_months")),
                     notes=parse_text(cell(row, mapping, "notes")),
+                    order_id=parse_text(cell(row, mapping, "order_id")),
                     row=number,
                 )
             )
         snap.issuances = dict(grouped)
+
+    def _parse_orders(self, wb: Workbook, snap: Snapshot) -> None:
+        # The Orders sheet is optional: a client who only records handovers still
+        # gets a working system, they simply have nothing on order.
+        if _find_sheet(wb, schema.ORDERS_SHEET) is None:
+            return
+        for number, row, mapping in self._rows(wb, schema.ORDERS_SHEET, schema.ORDER_COLUMNS, snap):
+            order_id = parse_text(cell(row, mapping, "order_id"))
+            emp_no = parse_text(cell(row, mapping, "employee_number"))
+            code = parse_text(cell(row, mapping, "item_code"))
+            if not order_id or not emp_no or not code:
+                snap.problems.append(
+                    SheetProblem(schema.ORDERS_SHEET, number, "missing order id, staff id or item")
+                )
+                continue
+            if order_id in snap.orders:
+                snap.problems.append(
+                    SheetProblem(schema.ORDERS_SHEET, number, f"duplicate order id {order_id}")
+                )
+                continue
+            ordered = parse_date(cell(row, mapping, "ordered_date"), dayfirst=self.dayfirst)
+            if ordered is None:
+                snap.problems.append(
+                    SheetProblem(
+                        schema.ORDERS_SHEET, number,
+                        f"unreadable order date {cell(row, mapping, 'ordered_date')!r} — row ignored",
+                    )
+                )
+                continue
+            snap.orders[order_id] = Order(
+                order_id=order_id,
+                employee_number=emp_no,
+                item_code=code,
+                ordered_date=ordered,
+                quantity=parse_int(cell(row, mapping, "quantity"), 1) or 1,
+                supplier_ref=parse_text(cell(row, mapping, "supplier_ref")),
+                notes=parse_text(cell(row, mapping, "notes")),
+                cancelled=parse_bool(cell(row, mapping, "cancelled"), False),
+                row=number,
+            )
 
 
 # --------------------------------------------------------------------- helpers
@@ -515,14 +593,44 @@ def _find_sheet(wb: Workbook, canonical: str):
     return None
 
 
-def _append_order(ws, *, create_if_missing: bool = True) -> list[str]:
+#: Per-sheet write spec: columns to match on, fallback order, headers to create.
+_SPEC = {
+    schema.ISSUANCES_SHEET: (
+        schema.ISSUANCE_COLUMNS, schema.ISSUANCE_WRITE_ORDER, schema.ISSUANCE_HEADERS),
+    schema.ORDERS_SHEET: (
+        schema.ORDER_COLUMNS, schema.ORDER_WRITE_ORDER, schema.ORDER_HEADERS),
+}
+
+#: field name -> the header text to create if that column does not exist yet.
+_LABELS = {sheet: dict(zip(spec[1], spec[2])) for sheet, spec in _SPEC.items()}
+
+
+def _unwritable(rows: Sequence[dict[str, Any]], order: Sequence[str]) -> list[str]:
+    """Fields carrying a value that the sheet has no column for.
+
+    A workbook written before this feature existed has no Order ID column, and
+    appending into it would silently drop the link between a delivery and its
+    order. Better to notice and add the column than to lose the data.
+    """
+    known = set(order)
+    missing: list[str] = []
+    for values in rows:
+        for field_name, value in values.items():
+            if value not in (None, "") and field_name not in known and field_name not in missing:
+                missing.append(field_name)
+    return missing
+
+
+def _append_order(ws, sheet: str = schema.ISSUANCES_SHEET, *,
+                  create_if_missing: bool = True) -> list[str]:
     """Match the sheet's existing header order so appended rows line up."""
+    columns, fallback, headers = _SPEC[sheet]
     header = next(ws.iter_rows(min_row=1, max_row=1, values_only=True), None)
     if not header:
         if create_if_missing:
-            ws.append(list(schema.ISSUANCE_HEADERS))
-        return list(schema.ISSUANCE_WRITE_ORDER)
-    mapping, _ = map_headers(header, schema.ISSUANCE_COLUMNS)
+            ws.append(list(headers))
+        return list(fallback)
+    mapping, _ = map_headers(header, columns)
     width = len(header)
     order: list[str] = [""] * width
     for field_name, idx in mapping.items():
@@ -531,8 +639,12 @@ def _append_order(ws, *, create_if_missing: bool = True) -> list[str]:
     return order
 
 
-def _issuance_row(iss: Issuance, order: Sequence[str]) -> list[Any]:
-    values = {
+def _row_for(values: dict[str, Any], order: Sequence[str]) -> list[Any]:
+    return [values.get(field_name) if field_name else None for field_name in order]
+
+
+def _issuance_values(iss: Issuance) -> dict[str, Any]:
+    return {
         "employee_number": iss.employee_number,
         "item_code": iss.item_code,
         "issued_date": iss.issued_date,
@@ -540,9 +652,22 @@ def _issuance_row(iss: Issuance, order: Sequence[str]) -> list[Any]:
         "size": iss.size,
         "issued_by": iss.issued_by,
         "cycle_months": iss.cycle_months,
+        "order_id": iss.order_id,
         "notes": iss.notes,
     }
-    return [values.get(field_name) if field_name else None for field_name in order]
+
+
+def _order_values(order: Order) -> dict[str, Any]:
+    return {
+        "order_id": order.order_id,
+        "employee_number": order.employee_number,
+        "item_code": order.item_code,
+        "ordered_date": order.ordered_date,
+        "quantity": order.quantity,
+        "supplier_ref": order.supplier_ref,
+        "cancelled": "Yes" if order.cancelled else None,
+        "notes": order.notes,
+    }
 
 
 def _employee_status(value: Any) -> EmployeeStatus:
@@ -585,6 +710,7 @@ def create_blank_workbook(path: str | Path) -> Path:
         (schema.ITEMS_SHEET, schema.ITEM_HEADERS),
         (schema.ENTITLEMENTS_SHEET, schema.ENTITLEMENT_HEADERS),
         (schema.ISSUANCES_SHEET, schema.ISSUANCE_HEADERS),
+        (schema.ORDERS_SHEET, schema.ORDER_HEADERS),
     ):
         wb.create_sheet(sheet).append(list(headers))
     wb.save(target)

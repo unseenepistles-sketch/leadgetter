@@ -9,8 +9,32 @@
   <a class="tile" href="/reports?state=overdue"><div class="n">{{ counts.overdue }}</div><div class="l">Overdue</div></a>
   <a class="tile" href="/reports?state=due"><div class="n">{{ counts.due }}</div><div class="l">Due now</div></a>
   <a class="tile" href="/reports?state=due_soon"><div class="n">{{ counts.due_soon }}</div><div class="l">Due within 6 months</div></a>
+  <a class="tile" href="/orders?status=all"><div class="n">{{ pending_delivery }}</div><div class="l">Pieces pending delivery</div></a>
   <a class="tile" href="/reports?state=ok"><div class="n">{{ counts.ok }}</div><div class="l">Up to date</div></a>
   <a class="tile" href="/data-quality"><div class="n">{{ counts.needs_review }}</div><div class="l">Needs review</div></a>
+</div>
+
+<div class="panel">
+  <h2>Action needed</h2>
+  <p class="sub" style="margin-bottom:8px">Overdue first, then upcoming renewals, then anything
+    still awaiting delivery — the order the stores desk works through its day.</p>
+  <div class="actions">
+    {% for a in actions %}
+    <div class="action">
+      {% if a.kind == 'order' %}
+        <span class="pill o-{{ a.status }}">{{ a.status.replace('_',' ') }}</span>
+      {% else %}
+        <span class="pill s-{{ a.status }}">{{ a.status.replace('_',' ') }}</span>
+      {% endif %}
+      <span>
+        <a class="who" href="/employees/{{ a.employee_number }}">{{ a.employee_name }}</a><br>
+        <span class="what">{{ a.item_name }} · {{ a.detail }}</span>
+      </span>
+    </div>
+    {% else %}
+    <p class="muted">Nothing outstanding — everyone is up to date and all orders have arrived.</p>
+    {% endfor %}
+  </div>
 </div>
 
 <div class="grid2">
@@ -21,6 +45,8 @@
       {# Bracket syntax throughout: `counts.items` would resolve to dict.items(). #}
       <dt>Employees</dt><dd>{{ store.counts['employees'] }}</dd>
       <dt>Issuance rows</dt><dd>{{ store.counts['issuances'] }}</dd>
+      <dt>Orders</dt><dd><a href="/orders">{{ store.counts['orders'] }}</a>
+        {% if open_orders %}<span class="muted">({{ open_orders }} open)</span>{% endif %}</dd>
       <dt>Uniform items</dt><dd>{{ store.counts['items'] }}</dd>
       <dt>Unsaved rows</dt><dd>{{ pending_writes }}</dd>
       {% if last_write_error %}<dt>Write error</dt><dd style="color:var(--over)">{{ last_write_error }}</dd>{% endif %}

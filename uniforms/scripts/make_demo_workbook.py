@@ -38,39 +38,43 @@ LAST = [
     "Lawal", "Adamu", "Onyeka", "Garba", "Uche", "Suleiman", "Afolabi", "Idowu",
 ]
 
+# Mirrors the operations department this is being built for: a tram network,
+# where the uniform is customer-facing and the renewal cycle is a real policy.
 DEPARTMENTS = {
-    "Operations": ["Field Officer", "Operations Supervisor"],
-    "Facilities": ["Technician", "Cleaner"],
-    "Security": ["Security Officer", "Security Supervisor"],
-    "Catering": ["Chef", "Catering Assistant"],
-    "Logistics": ["Driver", "Warehouse Assistant"],
-    "Front Office": ["Receptionist"],
+    "Operations": ["Controller", "Line Supervisor"],
+    "Drivers": ["Tram Driver"],
+    "Stations": ["Station Assistant", "Line Supervisor"],
+    "Depot": ["Depot Technician"],
 }
 
+# The catalogue and cycles the department already uses. Shirts and trousers wear
+# out yearly; structured and hard-wearing items run two years.
 ITEMS = [
     # code, name, category, cycle months, qty, size key
-    ("SHIRT", "Long-sleeve shirt", "Shirt", 12, 3, "shirt"),
-    ("TROUSER", "Work trousers", "Trouser", 12, 2, "trouser"),
-    ("BLAZER", "Blazer", "Blazer", 24, 1, "blazer"),
-    ("COAT", "Winter coat", "Blazer", 24, 1, "blazer"),
-    ("BOOTS", "Safety boots", "Shoe", 12, 1, "shoe"),
-    ("HIVIS", "Hi-vis jacket", "Blazer", 24, 1, "blazer"),
-    ("APRON", "Catering apron", "Shirt", 12, 2, "shirt"),
+    ("SHIRT", "Shirt", "Shirt", 12, 3, "shirt"),
+    ("TROUSER", "Trousers", "Trouser", 12, 2, "trouser"),
+    ("JACKET", "Jacket", "Blazer", 24, 1, "blazer"),
+    ("WAISTCOAT", "Waist Coat", "Blazer", 24, 1, "blazer"),
+    ("WINTERJKT", "Winter Jacket", "Blazer", 24, 1, "blazer"),
+    ("SHOES", "Shoes", "Shoe", 24, 1, "shoe"),
+    ("TIE", "Tie", "Accessory", 24, 1, None),
+    ("BELT", "Belt", "Accessory", 24, 1, None),
+    ("SCARF", "Head Scarf", "Accessory", 24, 1, None),
+    ("BADGE", "Name Badge", "Accessory", 24, 1, None),
 ]
 
 # Which kit each role gets. Deliberately varied so the report is not uniform.
 ENTITLEMENTS = {
-    "Field Officer": [("SHIRT", 3), ("TROUSER", 2), ("BLAZER", 1), ("BOOTS", 1)],
-    "Operations Supervisor": [("SHIRT", 4), ("TROUSER", 3), ("BLAZER", 1), ("COAT", 1)],
-    "Technician": [("SHIRT", 3), ("TROUSER", 3), ("BOOTS", 1), ("HIVIS", 1)],
-    "Cleaner": [("SHIRT", 3), ("TROUSER", 2), ("BOOTS", 1)],
-    "Security Officer": [("SHIRT", 3), ("TROUSER", 3), ("BLAZER", 1), ("BOOTS", 1), ("HIVIS", 1)],
-    "Security Supervisor": [("SHIRT", 4), ("TROUSER", 3), ("BLAZER", 1), ("COAT", 1)],
-    "Chef": [("SHIRT", 4), ("TROUSER", 3), ("APRON", 2), ("BOOTS", 1)],
-    "Catering Assistant": [("SHIRT", 3), ("APRON", 2), ("BOOTS", 1)],
-    "Driver": [("SHIRT", 3), ("TROUSER", 2), ("HIVIS", 1), ("BOOTS", 1)],
-    "Warehouse Assistant": [("SHIRT", 3), ("TROUSER", 2), ("HIVIS", 1), ("BOOTS", 1)],
-    "Receptionist": [("SHIRT", 3), ("TROUSER", 2), ("BLAZER", 1)],
+    "Controller": [("SHIRT", 3), ("TROUSER", 2), ("JACKET", 1), ("WAISTCOAT", 1),
+                   ("SHOES", 1), ("TIE", 1), ("BADGE", 1)],
+    "Line Supervisor": [("SHIRT", 3), ("TROUSER", 2), ("JACKET", 1), ("WAISTCOAT", 1),
+                        ("WINTERJKT", 1), ("SHOES", 1), ("TIE", 1), ("BELT", 1), ("BADGE", 1)],
+    "Tram Driver": [("SHIRT", 3), ("TROUSER", 2), ("JACKET", 1), ("SHOES", 1),
+                    ("TIE", 1), ("BELT", 1), ("BADGE", 1)],
+    "Station Assistant": [("SHIRT", 3), ("TROUSER", 2), ("WAISTCOAT", 1), ("SHOES", 1),
+                          ("SCARF", 1), ("BADGE", 1)],
+    "Depot Technician": [("SHIRT", 3), ("TROUSER", 2), ("WINTERJKT", 1), ("SHOES", 1),
+                         ("BELT", 1), ("BADGE", 1)],
 }
 
 SHIRT_SIZES = ["S", "M", "L", "XL", "XXL"]
@@ -121,8 +125,8 @@ def build(path: Path, *, count: int = 48, today: date | None = None, seed: int =
         person = {
             "number": f"EMP{i:04d}",
             "name": name,
-            "email": f"{name.split()[0].lower()}.{name.split()[1].lower()}@northgate-demo.test",
-            "manager": f"{department.split()[0].lower()}.manager@northgate-demo.test",
+            "email": f"{name.split()[0].lower()}.{name.split()[1].lower()}@tramline-demo.test",
+            "manager": f"{department.split()[0].lower()}.manager@tramline-demo.test",
             "department": department,
             "role": role,
             "joined": joined,
@@ -214,10 +218,58 @@ def build(path: Path, *, count: int = 48, today: date | None = None, seed: int =
 
     _style(ws, [17, 12, 13, 10, 9, 14, 14, 20])
 
+    # ------------------------------------------------------------------- orders
+    # Open orders in various states of arrival, so the log shows the real spread:
+    # nothing yet, part-shipped, and complete.
+    ws = wb.create_sheet("Orders")
+    ws.append(["Order ID", "Employee Number", "Item Code", "Ordered Date", "Quantity",
+               "Supplier Ref", "Cancelled", "Notes"])
+    deliveries: list[list] = []
+    active = [p for p in people if p["status"] == "Active" and p["joined"]]
+    orders = 0
+    for n, p in enumerate(rng.sample(active, k=min(14, len(active)))):
+        entitled = ENTITLEMENTS[p["role"]]
+        code, qty = entitled[n % len(entitled)]
+        qty = max(1, qty)
+        ordered_on = today - timedelta(days=rng.randint(3, 70))
+        orders += 1
+        order_id = f"ORD-{ordered_on:%Y%m%d}-{orders:03d}"
+        ws.append([order_id, p["number"], code, ordered_on, qty,
+                   f"PO-{4200 + orders}", None, ""])
+
+        # A third arrive complete, a third part-shipped, a third not yet.
+        bucket = n % 3
+        if bucket == 0:
+            got = qty
+        elif bucket == 1:
+            got = max(1, qty // 2) if qty > 1 else 0
+        else:
+            got = 0
+        if got:
+            arrived = ordered_on + timedelta(days=rng.randint(2, 25))
+            if arrived > today:
+                arrived = today
+            deliveries.append([
+                p["number"], code, arrived, got,
+                p[size_keys[code]] if size_keys.get(code) else None,
+                rng.choice(issuers), cycles[code], order_id, "",
+            ])
+    _style(ws, [20, 17, 12, 13, 10, 14, 11, 20])
+
+    # Deliveries are ordinary issuance rows carrying the order they fulfil, so the
+    # renewal clock runs from arrival and "1/2 delivered" is always computed.
+    issues = wb["Issuances"]
+    issues.cell(row=1, column=8, value="Order ID")
+    issues.cell(row=1, column=9, value="Notes")
+    for row in deliveries:
+        issues.append(row)
+    rows += len(deliveries)
+
     path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(path)
     wb.close()
-    print(f"wrote {path}: {len(people)} employees, {len(ITEMS)} items, {rows} issuance rows")
+    print(f"wrote {path}: {len(people)} employees, {len(ITEMS)} items, "
+          f"{rows} issuance rows, {orders} orders")
     return path
 
 

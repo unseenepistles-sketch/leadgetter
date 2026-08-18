@@ -215,3 +215,69 @@ def test_data_quality_reports_problem_rows(tmp_path, monkeypatch):
 
     for cached in (config.get_settings, deps.get_store, deps.get_service, deps.get_ledger):
         cached.cache_clear()
+
+
+# --- ordering through the app ---
+
+def test_order_pages_render(client):
+    for path in ("/orders", "/orders/new"):
+        assert client.get(path).status_code == 200
+
+
+def test_place_an_order_through_the_form(client):
+    response = client.post(
+        "/orders",
+        data={"employee_number": "E002", "qty_SHIRT": "6", "qty_TROUSER": "3",
+              "qty_BLAZER": "0", "supplier_ref": "PO-1"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303 and "ok=" in response.headers["location"]
+
+    body = client.get("/api/orders?employee=E002").json()
+    assert body["total"] == 2
+    assert {i["quantity"] for i in body["items"]} == {6, 3}
+    assert body["pending_pieces"] == 9
+
+
+def test_order_form_without_a_staff_member_is_rejected(client):
+    response = client.post("/orders", data={"qty_SHIRT": "2"}, follow_redirects=False)
+    assert "err=" in response.headers["location"]
+
+
+def test_receiving_part_of_an_order_from_the_log(client):
+    client.post("/api/orders", json={"employee_number": "E002", "quantities": {"SHIRT": 4}})
+    order_id = client.get("/api/orders?employee=E002").json()["items"][0]["order_id"]
+
+    response = client.post(f"/orders/{order_id}/deliver", data={"quantity": "1"},
+                           follow_redirects=False)
+    assert response.status_code == 303 and "ok=" in response.headers["location"]
+
+    line = client.get(f"/api/orders/{order_id}").json()
+    assert line["status"] == "partially_delivered"
+    assert (line["delivered"], line["pending"]) == (1, 3)
+
+
+def test_delivery_shows_up_on_the_employees_record(client):
+    client.post("/api/orders", json={"employee_number": "E002", "quantities": {"SHIRT": 1}})
+    order_id = client.get("/api/orders?employee=E002").json()["items"][0]["order_id"]
+    client.post(f"/api/orders/{order_id}/deliveries", json={})
+
+    statuses = {i["item_code"]: i["status"]
+                for i in client.get("/api/employees/E002/uniforms").json()["items"]}
+    assert statuses["SHIRT"] == "ok"
+
+
+def test_action_needed_endpoint_ranks_renewals_above_orders(client):
+    client.post("/api/orders", json={"employee_number": "E002", "quantities": {"SHIRT": 2}})
+    rows = client.get("/api/action-needed").json()["items"]
+    kinds = [r["kind"] for r in rows]
+    if "order" in kinds and "renewal" in kinds:
+        assert kinds.index("renewal") < kinds.index("order")
+
+
+def test_dashboard_shows_pending_delivery(client):
+    client.post("/api/orders", json={"employee_number": "E002", "quantities": {"SHIRT": 5}})
+    counts = client.get("/api/dashboard/summary").json()["counts"]
+    assert counts["pending_delivery"] == 5
+    assert counts["open_orders"] == 1
+    assert "Pieces pending delivery" in client.get("/").text
