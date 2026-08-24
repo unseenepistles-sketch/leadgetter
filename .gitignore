@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# Local config & secrets
+.env
+*.local
+
+# Database / runtime data (created on first run)
+*.db
+*.sqlite3
+data/
+exports/
+
+# OS
+.DS_Store
+
+# Editor
+.idea/
+.vscode/

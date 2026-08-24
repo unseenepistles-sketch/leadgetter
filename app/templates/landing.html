@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Get {{ offer }}{% endblock %}
+{% block content %}
+<div class="hero">
+  <div class="card">
+    <h1>Get {{ offer }}</h1>
+    <p class="note">Drop your email below and I'll send it straight over. No spam — unsubscribe any time in one click.</p>
+    <form method="post" action="/subscribe">
+      <label>Your name (optional)</label>
+      <input name="name" placeholder="First name">
+      <label>Email address</label>
+      <input type="email" name="email" placeholder="you@example.com" required>
+      <div class="consent">
+        <input type="checkbox" id="consent" name="consent" value="on" required>
+        <label for="consent">Yes, email me {{ offer }} and occasional related updates.
+          I can unsubscribe at any time.</label>
+      </div>
+      <button type="submit">Send it to me →</button>
+    </form>
+    <p class="note center" style="margin-top:16px">We store your email only to send what you asked for. We never sell or share it.</p>
+  </div>
+</div>
+{% endblock %}
