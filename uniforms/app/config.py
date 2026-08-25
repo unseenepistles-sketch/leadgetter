@@ -76,6 +76,13 @@ class Settings:
 
         self.brand_name = os.getenv("BRAND_NAME", "Uniform Manager")
 
+        # --- sign-in ---
+        # Off by default so a local demo needs no setup. Switch on before this is
+        # reachable by anyone but you.
+        self.auth_enabled = _bool(os.getenv("AUTH_ENABLED"), False)
+        self.auth_users = os.getenv("AUTH_USERS", "")
+        self.secret_key = os.getenv("SECRET_KEY", "")
+
     @property
     def smtp_enabled(self) -> bool:
         return bool(self.smtp_host)
@@ -90,6 +97,7 @@ class Settings:
             "SMTP configured": self.smtp_enabled,
             "Reminders enabled": self.reminders_enabled,
             "Live sending": self.sending_for_real,
+            "Sign-in required": self.auth_enabled and bool(self.auth_users),
         }
 
 

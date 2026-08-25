@@ -9,14 +9,15 @@ import logging
 from datetime import date
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from ..auth import COOKIE, User
 from ..config import get_settings
-from ..deps import get_ledger, get_runner, get_service, get_store
+from ..deps import get_auth, get_ledger, get_runner, get_service, get_store
 from ..domain.models import ORDER_LABELS, EmployeeStatus, OrderStatus, UniformStatus
 from ..service import NotFound, ValidationError
 
@@ -36,11 +37,77 @@ STATES = [
 ]
 
 
+def current_user(request: Request) -> Optional[User]:
+    return get_auth().read(request.cookies.get(COOKIE))
+
+
+def _actor(request: Request, form) -> str:
+    """Who to record for an edit.
+
+    A signed-in identity always wins over the form field: when sign-in is on,
+    "authorised by" should be a fact rather than a claim.
+    """
+    user = current_user(request)
+    if user is not None:
+        return user.name
+    return (form.get("who") or form.get("authorised_by") or "").strip()
+
+
+def _guard(request: Request, *, admin: bool = False):
+    """Returns a redirect when the request may not proceed, else None."""
+    auth = get_auth()
+    if not auth.enabled:
+        return None
+    user = current_user(request)
+    if user is None:
+        return RedirectResponse(f"/login?next={quote(request.url.path)}", status_code=303)
+    if admin and not user.admin:
+        return _back("/", err="You do not have permission to change records.")
+    return None
+
+
 def _render(request: Request, template: str, active: str, **context):
     return templates.TemplateResponse(
         request, template,
-        {"brand": get_settings().brand_name, "active": active, **context},
+        {
+            "brand": get_settings().brand_name,
+            "active": active,
+            "user": current_user(request),
+            "auth_on": get_auth().enabled,
+            **context,
+        },
     )
+
+
+@router.get("/login")
+def login_form(request: Request, next: str = "/"):
+    if not get_auth().enabled:
+        return _back("/", ok="Sign-in is not switched on for this installation.")
+    return _render(request, "login.html", "", next=next)
+
+
+@router.post("/login")
+async def login_submit(request: Request):
+    form = await request.form()
+    target = form.get("next") or "/"
+    user = get_auth().authenticate(form.get("username", ""), form.get("password", ""))
+    if user is None:
+        log.warning("failed sign-in for %r", form.get("username"))
+        return _back("/login", err="That username and password did not match.")
+    response = RedirectResponse(target, status_code=303)
+    response.set_cookie(
+        COOKIE, get_auth().issue(user),
+        httponly=True, samesite="lax",
+        secure=request.url.scheme == "https", max_age=get_auth().max_age_seconds,
+    )
+    return response
+
+
+@router.post("/logout")
+def logout():
+    response = RedirectResponse("/login", status_code=303)
+    response.delete_cookie(COOKIE)
+    return response
 
 
 def _back(url: str, *, ok: str = "", err: str = "") -> RedirectResponse:
@@ -149,7 +216,7 @@ async def edit_employee_submit(employee_number: str, request: Request):
     try:
         get_service().edit_employee(
             employee_number, fields,
-            who=form.get("who") or "", reason=form.get("reason") or None,
+            who=_actor(request, form), reason=form.get("reason") or None,
         )
     except (ValidationError, NotFound) as exc:
         return _back(f"/employees/{employee_number}/edit", err=str(exc))
@@ -163,14 +230,14 @@ async def set_override(employee_number: str, request: Request):
     try:
         if form.get("clear"):
             get_service().clear_renewal_override(
-                employee_number, item_code, who=form.get("authorised_by") or ""
+                employee_number, item_code, who=_actor(request, form)
             )
             message = "Renewal date returned to the calculated one."
         else:
             get_service().set_renewal_override(
                 employee_number, item_code, form.get("next_due"),
                 reason=form.get("reason") or "",
-                authorised_by=form.get("authorised_by") or "",
+                authorised_by=_actor(request, form),
             )
             message = "Renewal date overridden and recorded in the audit trail."
     except (ValidationError, NotFound) as exc:
@@ -194,7 +261,7 @@ async def edit_item_submit(item_code: str, request: Request):
     if form.get("default_quantity"):
         fields["default_quantity"] = form["default_quantity"]
     try:
-        get_service().edit_item(item_code, fields, who=form.get("who") or "",
+        get_service().edit_item(item_code, fields, who=_actor(request, form),
                                 reason=form.get("reason") or None)
     except (ValidationError, NotFound) as exc:
         return _back("/catalogue", err=str(exc))
@@ -214,7 +281,7 @@ async def edit_order_submit(order_id: str, request: Request):
     if form.get("cancelled"):
         fields["cancelled"] = True
     try:
-        get_service().edit_order(order_id, fields, who=form.get("who") or "",
+        get_service().edit_order(order_id, fields, who=_actor(request, form),
                                  reason=form.get("reason") or None)
     except (ValidationError, NotFound) as exc:
         return _back("/orders", err=str(exc))

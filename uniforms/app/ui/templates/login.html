@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block body %}
+<div style="max-width:400px;margin:6vh auto 0">
+  <h1>Sign in</h1>
+  <p class="sub">{{ brand }}</p>
+  <form method="post" class="panel">
+    <input type="hidden" name="next" value="{{ next }}">
+    <div style="margin-bottom:13px">
+      <label for="username">Username</label>
+      <input id="username" name="username" autocomplete="username" autofocus required style="width:100%">
+    </div>
+    <div style="margin-bottom:16px">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required style="width:100%">
+    </div>
+    <button type="submit" style="width:100%">Sign in</button>
+  </form>
+</div>
+{% endblock %}

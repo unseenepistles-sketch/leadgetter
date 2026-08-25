@@ -10,6 +10,7 @@ from datetime import date
 from functools import lru_cache
 from typing import Optional
 
+from .auth import Authenticator, build_authenticator
 from .config import Settings, get_settings
 from .domain.due import Policy
 from .excelstore.workbook import WorkbookStore, create_blank_workbook
@@ -48,6 +49,11 @@ def get_service() -> UniformService:
             first_issue_grace_days=settings.first_issue_grace_days,
         ),
     )
+
+
+@lru_cache
+def get_auth() -> Authenticator:
+    return build_authenticator()
 
 
 @lru_cache

@@ -281,3 +281,141 @@ def test_dashboard_shows_pending_delivery(client):
     assert counts["pending_delivery"] == 5
     assert counts["open_orders"] == 1
     assert "Pieces pending delivery" in client.get("/").text
+
+
+# --- sign-in ---
+
+@pytest.fixture
+def secure_client(tmp_path, monkeypatch):
+    """A client with sign-in switched on: one admin, one read-only user."""
+    from app.auth import hash_password
+
+    workbook = clean_workbook(tmp_path / "uniforms.xlsx")
+    monkeypatch.setenv("WORKBOOK_PATH", str(workbook))
+    monkeypatch.setenv("BACKUP_DIR", str(tmp_path / "bak"))
+    monkeypatch.setenv("LEDGER_PATH", str(tmp_path / "ledger.sqlite3"))
+    monkeypatch.setenv("REMINDERS_ENABLED", "0")
+    monkeypatch.setenv("AUTH_ENABLED", "1")
+    monkeypatch.setenv("SECRET_KEY", "test-key")
+    monkeypatch.setenv(
+        "AUTH_USERS",
+        f"boss:{hash_password('good-pass')}:admin,desk:{hash_password('desk-pass')}:viewer",
+    )
+
+    from app import config, deps
+
+    caches = (config.get_settings, deps.get_store, deps.get_service,
+              deps.get_ledger, deps.get_auth)
+    for c in caches:
+        c.cache_clear()
+    from app.main import app
+
+    with TestClient(app) as c:
+        yield c
+    for c in caches:
+        c.cache_clear()
+
+
+def _sign_in(client, username, password):
+    return client.post("/login", data={"username": username, "password": password},
+                       follow_redirects=False)
+
+
+def test_pages_redirect_to_sign_in_when_locked(secure_client):
+    response = secure_client.get("/employees", follow_redirects=False)
+    assert response.status_code == 303
+    assert "/login" in response.headers["location"]
+
+
+def test_api_returns_401_rather_than_a_redirect(secure_client):
+    assert secure_client.get("/api/employees").status_code == 401
+
+
+def test_login_page_is_reachable_without_signing_in(secure_client):
+    assert secure_client.get("/login").status_code == 200
+
+
+def test_healthz_stays_open_for_monitoring(secure_client):
+    assert secure_client.get("/healthz").status_code == 200
+
+
+def test_wrong_password_is_refused(secure_client):
+    response = _sign_in(secure_client, "boss", "wrong")
+    assert "err=" in response.headers["location"]
+    assert secure_client.get("/api/employees").status_code == 401
+
+
+def test_signing_in_grants_access(secure_client):
+    _sign_in(secure_client, "boss", "good-pass")
+    assert secure_client.get("/api/employees").status_code == 200
+    assert secure_client.get("/employees").status_code == 200
+
+
+def test_a_read_only_user_can_look_but_not_change(secure_client):
+    _sign_in(secure_client, "desk", "desk-pass")
+    assert secure_client.get("/api/employees").status_code == 200
+    response = secure_client.patch("/api/employees/E002", json={"full_name": "Nope"})
+    assert response.status_code == 403
+    assert secure_client.get("/api/employees/E002").json()["employee"]["full_name"] != "Nope"
+
+
+def test_an_admin_can_change_records(secure_client):
+    _sign_in(secure_client, "boss", "good-pass")
+    response = secure_client.patch("/api/employees/E002", json={"full_name": "Renamed"})
+    assert response.status_code == 200
+
+
+def test_edits_are_attributed_to_the_signed_in_user_not_a_typed_name(secure_client, tmp_path):
+    """The whole point of sign-in: 'who' becomes a fact, not a claim."""
+    _sign_in(secure_client, "boss", "good-pass")
+    secure_client.post(
+        "/employees/E002/edit",
+        data={"full_name": "Renamed", "who": "somebody else", "reason": "typo"},
+        follow_redirects=False,
+    )
+    secure_client.post("/api/workbook/flush")
+
+    wb = load_workbook(tmp_path / "uniforms.xlsx")
+    rows = list(wb["ChangeLog"].iter_rows(values_only=True))
+    wb.close()
+    header, entry = rows[0], rows[-1]
+    assert entry[header.index("Who")] == "boss"
+
+
+def test_signing_out_revokes_access(secure_client):
+    _sign_in(secure_client, "boss", "good-pass")
+    secure_client.post("/logout", follow_redirects=False)
+    assert secure_client.get("/api/employees").status_code == 401
+
+
+def test_a_tampered_session_cookie_is_rejected(secure_client):
+    from app.auth import COOKIE
+
+    _sign_in(secure_client, "desk", "desk-pass")
+    token = secure_client.cookies.get(COOKIE)
+    secure_client.cookies.set(COOKIE, token[:-6] + "AAAAAA")
+    assert secure_client.get("/api/employees").status_code == 401
+
+
+def test_the_api_cannot_forge_who_made_a_change(secure_client, tmp_path):
+    """A caller claiming to be someone else is overruled by the session."""
+    _sign_in(secure_client, "boss", "good-pass")
+    secure_client.patch("/api/items/SHIRT",
+                        json={"renewal_cycle_months": 18, "who": "not-me"})
+    secure_client.post("/api/workbook/flush")
+
+    wb = load_workbook(tmp_path / "uniforms.xlsx")
+    rows = list(wb["ChangeLog"].iter_rows(values_only=True))
+    wb.close()
+    header, entry = rows[0], rows[-1]
+    assert entry[header.index("Who")] == "boss"
+
+
+def test_an_override_is_authorised_by_the_signed_in_user(secure_client):
+    _sign_in(secure_client, "boss", "good-pass")
+    body = secure_client.put(
+        "/api/employees/E002/overrides/SHIRT",
+        json={"next_due": "2030-01-01", "reason": "warranty replacement",
+              "authorised_by": "someone-else"},
+    ).json()
+    assert body["authorised_by"] == "boss"

@@ -9,13 +9,26 @@ from __future__ import annotations
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException, Query, Request
 
 from ..deps import get_ledger, get_runner, get_service, get_store
 from ..domain.models import ORDER_LABELS, Employee, Issuance, ItemStatus, OrderLine, OrderStatus
 from ..service import NotFound, ValidationError
 
 router = APIRouter(prefix="/api", tags=["api"])
+
+
+def _actor(request: Request, payload: dict) -> str:
+    """Who to attribute an edit to.
+
+    The signed-in identity always wins over anything in the request body: with
+    sign-in on, the audit trail must record who actually did it, not who the
+    caller says did it. Middleware puts the user on request.state.
+    """
+    user = getattr(request.state, "user", None)
+    if user is not None:
+        return user.name
+    return str(payload.get("who") or payload.get("authorised_by") or "").strip()
 
 
 # ------------------------------------------------------------------ serialisers
@@ -354,13 +367,13 @@ def action_needed(limit: int = Query(12, ge=1, le=100)) -> dict:
 
 
 @router.patch("/employees/{employee_number}")
-def edit_employee(employee_number: str, payload: dict = Body(...)) -> dict:
+def edit_employee(employee_number: str, request: Request, payload: dict = Body(...)) -> dict:
     """Edit staff details. Every change is written to the audit trail."""
     fields = {k: v for k, v in payload.items() if k not in ("who", "reason")}
     try:
         updated = get_service().edit_employee(
             employee_number, fields,
-            who=payload.get("who", ""), reason=payload.get("reason"),
+            who=_actor(request, payload), reason=payload.get("reason"),
         )
     except NotFound as exc:
         raise HTTPException(404, str(exc)) from exc
@@ -370,11 +383,11 @@ def edit_employee(employee_number: str, payload: dict = Body(...)) -> dict:
 
 
 @router.patch("/orders/{order_id}")
-def edit_order(order_id: str, payload: dict = Body(...)) -> dict:
+def edit_order(order_id: str, request: Request, payload: dict = Body(...)) -> dict:
     fields = {k: v for k, v in payload.items() if k not in ("who", "reason")}
     try:
         line = get_service().edit_order(
-            order_id, fields, who=payload.get("who", ""), reason=payload.get("reason")
+            order_id, fields, who=_actor(request, payload), reason=payload.get("reason")
         )
     except NotFound as exc:
         raise HTTPException(404, str(exc)) from exc
@@ -395,12 +408,12 @@ def order_deliveries(order_id: str) -> dict:
 
 
 @router.patch("/employees/{employee_number}/deliveries/{row}")
-def edit_delivery(employee_number: str, row: int, payload: dict = Body(...)) -> dict:
+def edit_delivery(employee_number: str, row: int, request: Request, payload: dict = Body(...)) -> dict:
     fields = {k: v for k, v in payload.items() if k not in ("who", "reason")}
     try:
         updated = get_service().edit_delivery(
             employee_number, row, fields,
-            who=payload.get("who", ""), reason=payload.get("reason"),
+            who=_actor(request, payload), reason=payload.get("reason"),
         )
     except NotFound as exc:
         raise HTTPException(404, str(exc)) from exc
@@ -410,12 +423,12 @@ def edit_delivery(employee_number: str, row: int, payload: dict = Body(...)) -> 
 
 
 @router.patch("/items/{item_code}")
-def edit_item(item_code: str, payload: dict = Body(...)) -> dict:
+def edit_item(item_code: str, request: Request, payload: dict = Body(...)) -> dict:
     """Edit the catalogue, including the renewal period."""
     fields = {k: v for k, v in payload.items() if k not in ("who", "reason")}
     try:
         updated = get_service().edit_item(
-            item_code, fields, who=payload.get("who", ""), reason=payload.get("reason")
+            item_code, fields, who=_actor(request, payload), reason=payload.get("reason")
         )
     except NotFound as exc:
         raise HTTPException(404, str(exc)) from exc
@@ -429,13 +442,13 @@ def edit_item(item_code: str, payload: dict = Body(...)) -> dict:
 
 
 @router.put("/employees/{employee_number}/overrides/{item_code}")
-def set_override(employee_number: str, item_code: str, payload: dict = Body(...)) -> dict:
+def set_override(employee_number: str, item_code: str, request: Request, payload: dict = Body(...)) -> dict:
     """Override a calculated renewal date. Reason and authoriser are required."""
     try:
         override = get_service().set_renewal_override(
             employee_number, item_code, payload.get("next_due"),
             reason=payload.get("reason", ""),
-            authorised_by=payload.get("authorised_by", ""),
+            authorised_by=_actor(request, payload),
         )
     except NotFound as exc:
         raise HTTPException(404, str(exc)) from exc
@@ -450,8 +463,9 @@ def set_override(employee_number: str, item_code: str, payload: dict = Body(...)
 
 
 @router.delete("/employees/{employee_number}/overrides/{item_code}")
-def clear_override(employee_number: str, item_code: str, who: str = "") -> dict:
-    return {"cleared": get_service().clear_renewal_override(employee_number, item_code, who=who)}
+def clear_override(employee_number: str, item_code: str, request: Request, who: str = "") -> dict:
+    actor = _actor(request, {"who": who})
+    return {"cleared": get_service().clear_renewal_override(employee_number, item_code, who=actor)}
 
 
 @router.get("/data-quality")

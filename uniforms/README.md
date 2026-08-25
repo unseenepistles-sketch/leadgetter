@@ -51,6 +51,72 @@ all recognised.
 Anything unparseable becomes a **visible problem on the Data Quality page** and is excluded from
 reminders — never guessed at, and never turned into a confidently wrong email.
 
+## Ordering
+
+Ordering and handing over are separate events, often weeks apart, and an order
+routinely arrives in parts. An **order** is a request; an **issuance** is its
+fulfilment, carrying the order it satisfies.
+
+Two things follow, and both matter:
+
+* **"1/2 delivered" is always computed** from real handovers, never a number
+  somebody has to remember to update.
+* **The renewal clock starts at delivery, not at the order.** Ordered in January,
+  arrived in June, renews next June.
+
+Order statuses are `Pending`, `Partially Delivered` and `Delivered`, plus
+`Cancelled`. Each part-delivery keeps its own date.
+
+## Editing and administration
+
+Every record can be corrected: staff details, order quantities and dates,
+delivery dates, and renewal periods. Two rules hold throughout:
+
+* **Edits find their row by natural key at the moment of writing**, never by a
+  remembered row number. The client edits this workbook in Excel, and inserting a
+  single row shifts every cached index below it — a keyed edit cannot land on the
+  wrong person's record. The issuance sheet has no natural key, so those edits
+  carry the values they expect and refuse to write if the row no longer matches.
+* **Every changed field is written to a `ChangeLog` sheet** with its previous
+  value, who changed it and why. A no-op edit writes nothing.
+
+Edits refuse changes that contradict recorded facts — an order quantity cannot
+drop below what has already been delivered.
+
+**Changing a renewal period affects future issues only.** Every issuance snapshots
+the period in force when it was made, so moving Shirts to 18 months does not
+retroactively shift dates on garments already issued under 12.
+
+### Renewal overrides
+
+A calculated renewal date can be replaced by a manual one, but only with a reason
+and an authoriser, both recorded. An override sets the date; it does not excuse
+the item — an overridden date in the past still reads as **overdue**, so an
+override cannot be used to make a problem disappear from the report.
+
+## Sign-in
+
+Off by default so a local demo needs no setup. **Switch it on before this is
+reachable by anyone but you.**
+
+```
+AUTH_ENABLED=true
+SECRET_KEY=$(python -c "import secrets;print(secrets.token_hex(32))")
+AUTH_USERS=njiru:$(python scripts/hash_password.py 'her password'):admin,desk:...:viewer
+```
+
+`admin` may edit; `viewer` may only look. The gate is middleware in front of
+everything, so an endpoint added later is protected by default rather than only
+if somebody remembers to decorate it.
+
+With sign-in on, **the audit trail is filled in from the session, not from a form
+field** — including over the API, where a caller claiming to be someone else is
+overruled. That is what turns "authorised by" from a claim into a fact.
+
+This is deliberately small and swappable: the department will most likely end up
+signing in with their work accounts once the app is hosted, and the permission
+checks are already in the right places for that.
+
 ## Statuses
 
 | Status | Meaning |

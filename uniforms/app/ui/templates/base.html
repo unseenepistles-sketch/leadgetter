@@ -20,7 +20,8 @@
          background:var(--bg); color:var(--ink); }
   a { color:var(--accent); }
   header { background:var(--panel); border-bottom:1px solid var(--line); padding:0 20px; }
-  nav { display:flex; gap:20px; align-items:center; max-width:1200px; margin:0 auto; }
+  nav { display:flex; gap:20px; align-items:center; max-width:1200px; margin:0 auto;
+        flex-wrap:wrap; }
   nav .brand { font-weight:650; padding:14px 0; margin-right:8px; }
   nav a { padding:14px 0; text-decoration:none; color:var(--muted); border-bottom:2px solid transparent; }
   nav a:hover { color:var(--ink); }
@@ -95,6 +96,10 @@
          border-bottom:1px solid var(--line); font-size:14px; }
   .cat:last-child { border-bottom:0; }
   .cat b { font-weight:650; }
+  .whoami { color:var(--muted); font-size:13px; }
+  .linkbtn { background:none; border:0; color:var(--muted); font:inherit; font-size:13px;
+             cursor:pointer; padding:14px 0; }
+  .linkbtn:hover { color:var(--ink); background:none; }
   .right { text-align:right; }
   .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; }
   .checks { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:8px; }
@@ -117,6 +122,14 @@
     <a href="/reports" class="{{ 'on' if active=='reports' }}">Reports</a>
     <a href="/catalogue" class="{{ 'on' if active=='catalogue' }}">Catalogue</a>
     <a href="/data-quality" class="{{ 'on' if active=='dq' }}">Data quality</a>
+    {% if auth_on %}
+      <span style="flex:1"></span>
+      {% if user %}
+        <span class="whoami">{{ user.name }}{% if not user.admin %} · read only{% endif %}</span>
+        <form method="post" action="/logout" style="display:inline">
+          <button type="submit" class="linkbtn">Sign out</button></form>
+      {% endif %}
+    {% endif %}
   </nav>
 </header>
 <main>
