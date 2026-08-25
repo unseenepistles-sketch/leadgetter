@@ -23,11 +23,11 @@ def service(tmp_path):
 @pytest.mark.parametrize(
     "qty,delivered,expected",
     [
-        (2, 0, OrderStatus.AWAITING),
+        (2, 0, OrderStatus.PENDING),
         (2, 1, OrderStatus.PARTIAL),
         (2, 2, OrderStatus.DELIVERED),
         (2, 3, OrderStatus.DELIVERED),   # over-delivery still counts as done
-        (1, 0, OrderStatus.AWAITING),
+        (1, 0, OrderStatus.PENDING),
     ],
 )
 def test_order_status(qty, delivered, expected):
@@ -78,7 +78,7 @@ def test_unknown_employee_is_rejected(service):
 def test_new_order_is_awaiting_delivery(service):
     order = service.place_order("E002", {"SHIRT": 2})[0]
     line = service.order_line(order.order_id)
-    assert line.status is OrderStatus.AWAITING
+    assert line.status is OrderStatus.PENDING
     assert line.delivered == 0 and line.pending == 2
 
 
@@ -179,7 +179,7 @@ def test_filtering_the_orders_log(service):
 
     assert len(service.order_lines()) == 2
     assert len(service.order_lines(status="partially_delivered")) == 1
-    assert len(service.order_lines(status="awaiting_delivery")) == 1
+    assert len(service.order_lines(status="pending")) == 1
     assert len(service.order_lines(employee_number="E003")) == 1
     assert len(service.order_lines(item_code="SHIRT")) == 1
 

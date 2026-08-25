@@ -199,6 +199,11 @@ def dashboard_summary() -> dict:
             **store.snapshot.counts,
         },
         "reminders": get_ledger().counts(),
+        "staff_by_category": service.staff_by_category(),
+        "recently_delivered": [order_json(l) for l in service.recently_delivered()],
+        "partially_delivered": [
+            order_json(l) for l in service.order_lines(status="partially_delivered")
+        ],
     }
 
 
@@ -346,6 +351,107 @@ def receive_delivery(order_id: str, payload: dict = Body(default={})) -> dict:
 def action_needed(limit: int = Query(12, ge=1, le=100)) -> dict:
     rows = get_service().action_needed(limit=limit)
     return {"items": [{**r, "date": r["date"].isoformat() if r["date"] else None} for r in rows]}
+
+
+@router.patch("/employees/{employee_number}")
+def edit_employee(employee_number: str, payload: dict = Body(...)) -> dict:
+    """Edit staff details. Every change is written to the audit trail."""
+    fields = {k: v for k, v in payload.items() if k not in ("who", "reason")}
+    try:
+        updated = get_service().edit_employee(
+            employee_number, fields,
+            who=payload.get("who", ""), reason=payload.get("reason"),
+        )
+    except NotFound as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return employee_json(updated)
+
+
+@router.patch("/orders/{order_id}")
+def edit_order(order_id: str, payload: dict = Body(...)) -> dict:
+    fields = {k: v for k, v in payload.items() if k not in ("who", "reason")}
+    try:
+        line = get_service().edit_order(
+            order_id, fields, who=payload.get("who", ""), reason=payload.get("reason")
+        )
+    except NotFound as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return order_json(line)
+
+
+@router.get("/orders/{order_id}/deliveries")
+def order_deliveries(order_id: str) -> dict:
+    """Each part-delivery with its own date — what a partial order is made of."""
+    service = get_service()
+    try:
+        service.order_line(order_id)
+    except NotFound as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"items": [issuance_json(i) for i in service.deliveries_for_order(order_id)]}
+
+
+@router.patch("/employees/{employee_number}/deliveries/{row}")
+def edit_delivery(employee_number: str, row: int, payload: dict = Body(...)) -> dict:
+    fields = {k: v for k, v in payload.items() if k not in ("who", "reason")}
+    try:
+        updated = get_service().edit_delivery(
+            employee_number, row, fields,
+            who=payload.get("who", ""), reason=payload.get("reason"),
+        )
+    except NotFound as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return issuance_json(updated)
+
+
+@router.patch("/items/{item_code}")
+def edit_item(item_code: str, payload: dict = Body(...)) -> dict:
+    """Edit the catalogue, including the renewal period."""
+    fields = {k: v for k, v in payload.items() if k not in ("who", "reason")}
+    try:
+        updated = get_service().edit_item(
+            item_code, fields, who=payload.get("who", ""), reason=payload.get("reason")
+        )
+    except NotFound as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {
+        "item_code": updated.item_code, "name": updated.name,
+        "renewal_cycle_months": updated.renewal_cycle_months,
+        "default_quantity": updated.default_quantity, "active": updated.active,
+    }
+
+
+@router.put("/employees/{employee_number}/overrides/{item_code}")
+def set_override(employee_number: str, item_code: str, payload: dict = Body(...)) -> dict:
+    """Override a calculated renewal date. Reason and authoriser are required."""
+    try:
+        override = get_service().set_renewal_override(
+            employee_number, item_code, payload.get("next_due"),
+            reason=payload.get("reason", ""),
+            authorised_by=payload.get("authorised_by", ""),
+        )
+    except NotFound as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {
+        "employee_number": override.employee_number, "item_code": override.item_code,
+        "next_due": override.next_due.isoformat() if override.next_due else None,
+        "reason": override.reason, "authorised_by": override.authorised_by,
+        "set_at": override.set_at.isoformat(),
+    }
+
+
+@router.delete("/employees/{employee_number}/overrides/{item_code}")
+def clear_override(employee_number: str, item_code: str, who: str = "") -> dict:
+    return {"cleared": get_service().clear_renewal_override(employee_number, item_code, who=who)}
 
 
 @router.get("/data-quality")

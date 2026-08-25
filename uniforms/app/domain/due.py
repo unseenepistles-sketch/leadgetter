@@ -59,8 +59,15 @@ def compute_status(
     last_issuance: Optional[Issuance],
     today: date,
     policy: Policy = Policy(),
+    override: Optional[date] = None,
 ) -> ItemStatus:
-    """Work out where one employee stands on one entitled item."""
+    """Work out where one employee stands on one entitled item.
+
+    ``override`` is a manually authorised next-due date. When present it replaces
+    the calculated one entirely — that is the point of an override — but the item
+    is still classified normally against it, so an overridden date that has passed
+    still shows as overdue rather than quietly disappearing.
+    """
     base = dict(
         employee_number=employee.employee_number,
         employee_name=employee.full_name,
@@ -87,6 +94,10 @@ def compute_status(
             reason="no join date and no issuance on record",
         )
 
+    if override is not None:
+        return _classify(base, cycle, last_issuance, override, today, policy,
+                         reason="renewal date set manually")
+
     if last_issuance is None:
         # No issuance row exists at all. This employee is invisible to any query
         # over the issuance log, which is exactly why the engine walks entitlements.
@@ -109,9 +120,12 @@ def compute_status(
             ),
         )
 
-    next_due = add_months(last_issuance.issued_date, cycle)
-    days = (next_due - today).days
+    return _classify(base, cycle, last_issuance,
+                     add_months(last_issuance.issued_date, cycle), today, policy)
 
+
+def _classify(base, cycle, last_issuance, next_due, today, policy, reason=None) -> ItemStatus:
+    days = (next_due - today).days
     if today > next_due + _days(policy.overdue_grace_days):
         status = UniformStatus.OVERDUE
     elif today >= next_due:
@@ -120,14 +134,14 @@ def compute_status(
         status = UniformStatus.DUE_SOON
     else:
         status = UniformStatus.OK
-
     return ItemStatus(
         **base,
         status=status,
         cycle_months=cycle,
-        last_issued=last_issuance.issued_date,
+        last_issued=last_issuance.issued_date if last_issuance else None,
         next_due=next_due,
         days_until_due=days,
+        reason=reason,
     )
 
 
@@ -138,16 +152,19 @@ def statuses_for_employee(
     issuances: Iterable[Issuance],
     today: date,
     policy: Policy = Policy(),
+    overrides: Optional[Mapping[str, date]] = None,
 ) -> list[ItemStatus]:
     """Every entitled item for one employee, including ones never issued."""
     latest = latest_issuance_by_item(issuances)
+    overrides = overrides or {}
     out: list[ItemStatus] = []
     for ent in entitlements:
         item = items.get(ent.item_code)
         if item is None or not item.active:
             continue
         out.append(
-            compute_status(employee, item, ent, latest.get(ent.item_code), today, policy)
+            compute_status(employee, item, ent, latest.get(ent.item_code), today, policy,
+                           override=overrides.get(ent.item_code))
         )
     return out
 

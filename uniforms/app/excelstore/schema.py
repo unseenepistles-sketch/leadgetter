@@ -12,6 +12,8 @@ ITEMS_SHEET = "UniformItems"
 ENTITLEMENTS_SHEET = "Entitlements"
 ISSUANCES_SHEET = "Issuances"
 ORDERS_SHEET = "Orders"
+OVERRIDES_SHEET = "RenewalOverrides"
+CHANGELOG_SHEET = "ChangeLog"
 
 #: Sheet name aliases, so we find the right tab whatever they called it.
 SHEET_ALIASES: dict[str, tuple[str, ...]] = {
@@ -23,6 +25,9 @@ SHEET_ALIASES: dict[str, tuple[str, ...]] = {
                       "issued items", "handover", "handovers"),
     ORDERS_SHEET: ("orders", "order", "orders log", "orderlog", "order log", "ordered",
                    "purchase", "purchases", "requisitions", "requisition"),
+    OVERRIDES_SHEET: ("renewaloverrides", "overrides", "override", "renewal overrides",
+                      "manual renewals", "exceptions"),
+    CHANGELOG_SHEET: ("changelog", "change log", "audit", "audit log", "edits", "history"),
 }
 
 EMPLOYEE_COLUMNS = (
@@ -87,6 +92,30 @@ ORDER_COLUMNS = (
     Column("cancelled", ("cancelled", "canceled", "void", "voided")),
 )
 
+OVERRIDE_COLUMNS = (
+    Column("employee_number", ("employee number", "employee no", "staff id", "id",
+                               "employee id"), required=True),
+    Column("item_code", ("item code", "code", "item", "sku"), required=True),
+    Column("next_due", ("next due", "next due date", "override date", "renewal due",
+                        "override next due"), required=True),
+    Column("reason", ("reason", "justification", "why", "remarks", "notes")),
+    Column("authorised_by", ("authorised by", "authorized by", "approved by", "authoriser",
+                             "approver", "by")),
+    Column("set_at", ("set at", "date set", "recorded", "created")),
+    Column("active", ("active", "in force", "enabled", "current")),
+)
+
+CHANGE_COLUMNS = (
+    Column("at", ("at", "when", "timestamp", "date"), required=True),
+    Column("who", ("who", "user", "changed by", "edited by")),
+    Column("record_type", ("record type", "type", "table", "sheet")),
+    Column("record_id", ("record id", "record", "id", "reference")),
+    Column("field", ("field", "column", "attribute")),
+    Column("old_value", ("old value", "was", "previous", "from")),
+    Column("new_value", ("new value", "now", "to", "value")),
+    Column("reason", ("reason", "why", "note", "remarks")),
+)
+
 #: Column order used when this app creates a workbook from scratch, and when it
 #: appends a row to an existing sheet that lacks one of these headers.
 ISSUANCE_WRITE_ORDER = (
@@ -107,6 +136,22 @@ ORDER_WRITE_ORDER = (
 ORDER_HEADERS = (
     "Order ID", "Employee Number", "Item Code", "Ordered Date", "Quantity",
     "Supplier Ref", "Cancelled", "Notes",
+)
+
+OVERRIDE_WRITE_ORDER = (
+    "employee_number", "item_code", "next_due", "reason", "authorised_by", "set_at", "active",
+)
+
+OVERRIDE_HEADERS = (
+    "Employee Number", "Item Code", "Next Due", "Reason", "Authorised By", "Set At", "Active",
+)
+
+CHANGE_WRITE_ORDER = (
+    "at", "who", "record_type", "record_id", "field", "old_value", "new_value", "reason",
+)
+
+CHANGE_HEADERS = (
+    "At", "Who", "Record Type", "Record ID", "Field", "Old Value", "New Value", "Reason",
 )
 
 EMPLOYEE_HEADERS = (

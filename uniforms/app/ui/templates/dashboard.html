@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_macros.html" import status_pill %}
+{% extends "base.html" %}{% from "_macros.html" import status_pill, order_pill %}
 {% block body %}
 <h1>Uniform tracking</h1>
 <p class="sub">{{ counts.employees }} active employees &middot; workbook loaded
@@ -38,6 +38,38 @@
 </div>
 
 <div class="grid2">
+  <div class="panel">
+    <h2>Staff by category</h2>
+    {% for row in by_category %}
+      <div class="cat"><span>{{ row.role }}</span><b>{{ row.count }}</b></div>
+    {% else %}<p class="muted">No active staff on record.</p>{% endfor %}
+    <div class="cat" style="border-top:2px solid var(--line);margin-top:4px">
+      <span class="muted">Total tracked</span><b>{{ counts.employees }}</b></div>
+  </div>
+
+  <div class="panel">
+    <h2>Partially delivered</h2>
+    {% for l in partial %}
+      <div class="cat">
+        <span><a href="/employees/{{ l.order.employee_number }}">{{ l.employee_name }}</a>
+          <span class="muted">· {{ l.item_name }}</span></span>
+        <b>{{ l.delivered }}/{{ l.order.quantity }}</b>
+      </div>
+    {% else %}<p class="muted">No orders are part-delivered.</p>{% endfor %}
+    {% if partial %}<p style="margin:12px 0 0"><a href="/orders?status=partially_delivered">See all</a></p>{% endif %}
+  </div>
+
+  <div class="panel">
+    <h2>Recently delivered</h2>
+    {% for l in recently %}
+      <div class="cat">
+        <span><a href="/employees/{{ l.order.employee_number }}">{{ l.employee_name }}</a>
+          <span class="muted">· {{ l.item_name }} ×{{ l.order.quantity }}</span></span>
+        <span class="muted">{{ l.last_delivery.strftime('%d %b') }}</span>
+      </div>
+    {% else %}<p class="muted">Nothing delivered in the last 30 days.</p>{% endfor %}
+  </div>
+
   <div class="panel">
     <h2>Workbook</h2>
     <dl class="kv">

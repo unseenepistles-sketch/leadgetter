@@ -6,7 +6,7 @@ the system of record; these are just what a row looks like once parsed.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from enum import Enum
 from typing import Optional
 
@@ -20,14 +20,14 @@ class EmployeeStatus(str, Enum):
 class OrderStatus(str, Enum):
     """Where an order stands between being placed and reaching the person."""
 
-    AWAITING = "awaiting_delivery"
+    PENDING = "pending"
     PARTIAL = "partially_delivered"
     DELIVERED = "delivered"
     CANCELLED = "cancelled"
 
 
 ORDER_LABELS = {
-    OrderStatus.AWAITING: "Awaiting delivery",
+    OrderStatus.PENDING: "Pending",
     OrderStatus.PARTIAL: "Partially delivered",
     OrderStatus.DELIVERED: "Delivered",
     OrderStatus.CANCELLED: "Cancelled",
@@ -179,14 +179,55 @@ class OrderLine:
 
     @property
     def is_open(self) -> bool:
-        return self.status in (OrderStatus.AWAITING, OrderStatus.PARTIAL)
+        return self.status in (OrderStatus.PENDING, OrderStatus.PARTIAL)
 
 
 def order_status(quantity: int, delivered: int, cancelled: bool = False) -> OrderStatus:
     if cancelled:
         return OrderStatus.CANCELLED
     if delivered <= 0:
-        return OrderStatus.AWAITING
+        return OrderStatus.PENDING
     if delivered < quantity:
         return OrderStatus.PARTIAL
     return OrderStatus.DELIVERED
+
+
+@dataclass(frozen=True, slots=True)
+class RenewalOverride:
+    """A manually set next-due date, replacing the calculated one.
+
+    The spec requires overriding automatic renewal dates "with proper
+    authorization", so who authorised it and why are recorded alongside the date
+    — an override without that context is indistinguishable from a mistake.
+    """
+
+    employee_number: str
+    item_code: str
+    next_due: Optional[date]
+    reason: str
+    authorised_by: str
+    set_at: date
+    active: bool = True
+    row: Optional[int] = None
+
+    @property
+    def key(self) -> tuple[str, str]:
+        return (self.employee_number, self.item_code)
+
+
+@dataclass(frozen=True, slots=True)
+class Change:
+    """One field edit, for the audit trail.
+
+    Edits are the point at which a system of record stops being trustworthy
+    without history: every change records what it was before.
+    """
+
+    at: datetime
+    who: str
+    record_type: str
+    record_id: str
+    field: str
+    old_value: str
+    new_value: str
+    reason: Optional[str] = None

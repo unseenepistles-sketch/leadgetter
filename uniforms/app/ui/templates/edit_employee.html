@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ employee.full_name }}{% endblock %}
+{% block body %}
+<h1>Edit staff details</h1>
+<p class="sub">{{ employee.full_name }} · {{ employee.employee_number }}</p>
+
+<form method="post" class="panel">
+  <div class="grid2" style="margin-bottom:16px">
+    <div><label>Employee name</label>
+      <input name="full_name" value="{{ employee.full_name }}" style="width:100%" required></div>
+    <div><label>Staff category</label>
+      <input name="role" value="{{ employee.role or '' }}" list="roles" style="width:100%">
+      <datalist id="roles">{% for r in roles %}<option value="{{ r }}">{% endfor %}</datalist></div>
+    <div><label>Department</label>
+      <input name="department" value="{{ employee.department or '' }}" list="depts" style="width:100%">
+      <datalist id="depts">{% for d in departments %}<option value="{{ d }}">{% endfor %}</datalist></div>
+    <div><label>Status</label><select name="status" style="width:100%">
+      {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if s == employee.status.value }}>{{ s.replace('_',' ') }}</option>{% endfor %}
+    </select></div>
+    <div><label>Email</label>
+      <input name="email" type="email" value="{{ employee.email or '' }}" style="width:100%"></div>
+    <div><label>Manager email</label>
+      <input name="manager_email" type="email" value="{{ employee.manager_email or '' }}" style="width:100%"></div>
+    <div><label>Join date</label>
+      <input name="join_date" type="date" value="{{ employee.join_date.isoformat() if employee.join_date else '' }}" style="width:100%"></div>
+  </div>
+
+  <h2>Sizes</h2>
+  <div class="grid2" style="margin-bottom:16px">
+    <div><label>Shirt</label><input name="shirt_size" value="{{ employee.sizes.get('shirt','') }}" style="width:100%"></div>
+    <div><label>Trouser</label><input name="trouser_size" value="{{ employee.sizes.get('trouser','') }}" style="width:100%"></div>
+    <div><label>Jacket / waistcoat</label><input name="blazer_size" value="{{ employee.sizes.get('blazer','') }}" style="width:100%"></div>
+    <div><label>Shoes</label><input name="shoe_size" value="{{ employee.sizes.get('shoe','') }}" style="width:100%"></div>
+  </div>
+
+  <div class="audit">
+    <div class="grid2">
+      <div><label>Your name <span class="req">required</span></label>
+        <input name="who" required placeholder="Who is making this change" style="width:100%"></div>
+      <div><label>Reason</label>
+        <input name="reason" placeholder="Optional, but recorded" style="width:100%"></div>
+    </div>
+    <p class="muted" style="font-size:13px;margin:9px 0 0">Every changed field is written to the
+      change log with its previous value.</p>
+  </div>
+
+  <div style="display:flex;gap:12px;align-items:center;margin-top:16px">
+    <span style="flex:1"></span>
+    <a href="/employees/{{ employee.employee_number }}" class="muted" style="text-decoration:none">Cancel</a>
+    <button type="submit">Save changes</button>
+  </div>
+</form>
+{% endblock %}

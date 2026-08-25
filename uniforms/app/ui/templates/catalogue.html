@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Uniform catalogue</h1>
+<p class="sub">Renewal periods live here. Changing one affects future issues only —
+   every past issue keeps the period that applied when it was made.</p>
+
+<div class="panel scroll">
+<table>
+  <thead><tr><th>Item</th><th>Category</th><th class="right">Renewal (months)</th>
+    <th class="right">Default qty</th><th>Change</th></tr></thead>
+  <tbody>
+  {% for i in items %}
+    <tr>
+      <td>{{ i.name }} <span class="muted">{{ i.item_code }}</span></td>
+      <td>{{ i.category or '—' }}</td>
+      <td class="right">{{ i.renewal_cycle_months }}</td>
+      <td class="right">{{ i.default_quantity }}</td>
+      <td>
+        <form method="post" action="/catalogue/{{ i.item_code }}" style="display:flex;gap:6px;align-items:center">
+          <input type="number" name="renewal_cycle_months" value="{{ i.renewal_cycle_months }}"
+                 min="1" max="120" style="width:74px" aria-label="Renewal months for {{ i.name }}">
+          <input name="who" placeholder="Your name" required style="width:130px"
+                 aria-label="Who is changing {{ i.name }}">
+          <button type="submit" class="ghost">Save</button>
+        </form>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

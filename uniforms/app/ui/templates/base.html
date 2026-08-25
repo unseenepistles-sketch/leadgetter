@@ -87,6 +87,14 @@
   .action:last-child { border-bottom:0; }
   .action .who { font-weight:600; }
   .action .what { color:var(--muted); font-size:13.5px; }
+  .audit { background:var(--bg); border:1px solid var(--line); border-radius:9px;
+           padding:13px 15px; margin-top:6px; }
+  .req { color:var(--over); font-weight:600; text-transform:none; letter-spacing:0; }
+  details summary::-webkit-details-marker { color:var(--muted); }
+  .cat { display:flex; justify-content:space-between; gap:12px; padding:8px 0;
+         border-bottom:1px solid var(--line); font-size:14px; }
+  .cat:last-child { border-bottom:0; }
+  .cat b { font-weight:650; }
   .right { text-align:right; }
   .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; }
   .checks { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:8px; }
@@ -107,6 +115,7 @@
     <a href="/issue" class="{{ 'on' if active=='issue' }}">Issue</a>
     <a href="/orders" class="{{ 'on' if active=='orders' }}">Orders</a>
     <a href="/reports" class="{{ 'on' if active=='reports' }}">Reports</a>
+    <a href="/catalogue" class="{{ 'on' if active=='catalogue' }}">Catalogue</a>
     <a href="/data-quality" class="{{ 'on' if active=='dq' }}">Data quality</a>
   </nav>
 </header>

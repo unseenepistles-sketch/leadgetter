@@ -17,7 +17,7 @@ from fastapi.templating import Jinja2Templates
 
 from ..config import get_settings
 from ..deps import get_ledger, get_runner, get_service, get_store
-from ..domain.models import ORDER_LABELS, OrderStatus, UniformStatus
+from ..domain.models import ORDER_LABELS, EmployeeStatus, OrderStatus, UniformStatus
 from ..service import NotFound, ValidationError
 
 log = logging.getLogger("uniforms.ui")
@@ -64,6 +64,9 @@ def dashboard(request: Request):
         pending_delivery=service.pending_delivery(),
         open_orders=len(service.order_lines(open_only=True)),
         actions=service.action_needed(limit=8),
+        by_category=service.staff_by_category(),
+        recently=service.recently_delivered(limit=6),
+        partial=service.order_lines(status="partially_delivered")[:6],
     )
 
 
@@ -113,8 +116,109 @@ def employee_detail(request: Request, employee_number: str):
             service.snapshot.issuances_for(employee_number),
             key=lambda i: i.issued_date, reverse=True,
         ),
+        overrides=service.overrides_for(employee_number),
+        orders=service.order_lines(employee_number=employee_number),
         today=date.today().isoformat(),
     )
+
+
+@router.get("/employees/{employee_number}/edit")
+def edit_employee_form(request: Request, employee_number: str):
+    service = get_service()
+    try:
+        employee = service.employee(employee_number)
+    except NotFound:
+        return _back("/employees", err=f"No employee {employee_number}")
+    return _render(
+        request, "edit_employee.html", "employees",
+        employee=employee, roles=service.roles(), departments=service.departments(),
+        statuses=[s.value for s in EmployeeStatus],
+    )
+
+
+@router.post("/employees/{employee_number}/edit")
+async def edit_employee_submit(employee_number: str, request: Request):
+    form = await request.form()
+    fields = {
+        k: (form.get(k) or None)
+        for k in ("full_name", "email", "manager_email", "department", "role",
+                  "join_date", "status", "shirt_size", "trouser_size",
+                  "blazer_size", "shoe_size")
+        if k in form
+    }
+    try:
+        get_service().edit_employee(
+            employee_number, fields,
+            who=form.get("who") or "", reason=form.get("reason") or None,
+        )
+    except (ValidationError, NotFound) as exc:
+        return _back(f"/employees/{employee_number}/edit", err=str(exc))
+    return _back(f"/employees/{employee_number}", ok="Staff details updated.")
+
+
+@router.post("/employees/{employee_number}/override")
+async def set_override(employee_number: str, request: Request):
+    form = await request.form()
+    item_code = form.get("item_code") or ""
+    try:
+        if form.get("clear"):
+            get_service().clear_renewal_override(
+                employee_number, item_code, who=form.get("authorised_by") or ""
+            )
+            message = "Renewal date returned to the calculated one."
+        else:
+            get_service().set_renewal_override(
+                employee_number, item_code, form.get("next_due"),
+                reason=form.get("reason") or "",
+                authorised_by=form.get("authorised_by") or "",
+            )
+            message = "Renewal date overridden and recorded in the audit trail."
+    except (ValidationError, NotFound) as exc:
+        return _back(f"/employees/{employee_number}", err=str(exc))
+    return _back(f"/employees/{employee_number}", ok=message)
+
+
+@router.get("/catalogue")
+def catalogue(request: Request):
+    service = get_service()
+    return _render(request, "catalogue.html", "catalogue",
+                   items=list(service.snapshot.items.values()))
+
+
+@router.post("/catalogue/{item_code}")
+async def edit_item_submit(item_code: str, request: Request):
+    form = await request.form()
+    fields = {}
+    if form.get("renewal_cycle_months"):
+        fields["renewal_cycle_months"] = form["renewal_cycle_months"]
+    if form.get("default_quantity"):
+        fields["default_quantity"] = form["default_quantity"]
+    try:
+        get_service().edit_item(item_code, fields, who=form.get("who") or "",
+                                reason=form.get("reason") or None)
+    except (ValidationError, NotFound) as exc:
+        return _back("/catalogue", err=str(exc))
+    return _back("/catalogue", ok=f"{item_code} updated. Existing issues keep their old cycle.")
+
+
+@router.post("/orders/{order_id}/edit")
+async def edit_order_submit(order_id: str, request: Request):
+    form = await request.form()
+    fields = {}
+    if form.get("quantity"):
+        fields["quantity"] = form["quantity"]
+    if form.get("ordered_date"):
+        fields["ordered_date"] = form["ordered_date"]
+    if "notes" in form:
+        fields["notes"] = form.get("notes") or None
+    if form.get("cancelled"):
+        fields["cancelled"] = True
+    try:
+        get_service().edit_order(order_id, fields, who=form.get("who") or "",
+                                 reason=form.get("reason") or None)
+    except (ValidationError, NotFound) as exc:
+        return _back("/orders", err=str(exc))
+    return _back("/orders", ok=f"Order {order_id} updated.")
 
 
 @router.get("/issue")

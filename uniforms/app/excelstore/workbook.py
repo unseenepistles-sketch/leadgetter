@@ -24,7 +24,7 @@ import shutil
 import threading
 import time
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Iterable, Optional, Sequence
@@ -32,11 +32,13 @@ from typing import Any, Iterable, Optional, Sequence
 from openpyxl import Workbook, load_workbook
 
 from ..domain.models import (
+    Change,
     Employee,
     EmployeeStatus,
     Entitlement,
     Issuance,
     Order,
+    RenewalOverride,
     UniformItem,
 )
 from . import fast_append, schema
@@ -63,6 +65,39 @@ class WorkbookLocked(WorkbookError):
 
 
 @dataclass(frozen=True, slots=True)
+class Append:
+    """A new row for the end of a sheet."""
+
+    sheet: str
+    values: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class Update:
+    """An edit to an existing row.
+
+    The row is located by **natural key** at write time, not by a remembered row
+    number. Cached indexes are unsafe here: the client edits this workbook in
+    Excel, and inserting a single row shifts every index below it — an edit would
+    then silently overwrite the wrong record. Looking the row up by key at the
+    moment of writing cannot drift.
+
+    ``row`` is only used where a sheet has no natural key (issuances), and then
+    ``expect`` is checked first so a shifted row is refused rather than clobbered.
+
+    Appends can be spliced into the sheet XML, but an edit has to rewrite specific
+    cells, so any batch containing one takes the openpyxl path. Edits are rare next
+    to handovers, so that costs nothing in practice.
+    """
+
+    sheet: str
+    values: dict[str, Any]
+    key: Optional[dict[str, Any]] = None
+    row: Optional[int] = None
+    expect: Optional[dict[str, Any]] = None
+
+
+@dataclass(frozen=True, slots=True)
 class SheetProblem:
     sheet: str
     row: Optional[int]
@@ -78,6 +113,7 @@ class Snapshot:
     entitlements: dict[str, list[Entitlement]] = field(default_factory=dict)
     issuances: dict[str, list[Issuance]] = field(default_factory=dict)
     orders: dict[str, Order] = field(default_factory=dict)
+    overrides: dict[tuple[str, str], RenewalOverride] = field(default_factory=dict)
     problems: list[SheetProblem] = field(default_factory=list)
     loaded_at: Optional[datetime] = None
     source_mtime: float = 0.0
@@ -115,6 +151,7 @@ class Snapshot:
             "entitlement_rules": sum(len(v) for v in self.entitlements.values()),
             "issuances": sum(len(v) for v in self.issuances.values()),
             "orders": len(self.orders),
+            "overrides": len(self.overrides),
             "problems": len(self.problems),
         }
 
@@ -137,8 +174,8 @@ class WorkbookStore:
 
         self._lock = threading.RLock()
         self._snapshot = Snapshot()
-        #: (canonical sheet, field -> value) awaiting a flush.
-        self._pending: list[tuple[str, dict[str, Any]]] = []
+        #: Appends and updates awaiting a flush, in the order they were made.
+        self._pending: list[Append | Update] = []
         self._flush_thread: Optional[threading.Thread] = None
         self._flush_requested = threading.Event()
         self._stopping = threading.Event()
@@ -210,7 +247,7 @@ class WorkbookStore:
         with self._lock:
             for iss in issuances:
                 self._snapshot.issuances.setdefault(iss.employee_number, []).append(iss)
-                self._pending.append((schema.ISSUANCES_SHEET, _issuance_values(iss)))
+                self._pending.append(Append(schema.ISSUANCES_SHEET, _issuance_values(iss)))
         self.request_flush()
         return len(issuances)
 
@@ -219,9 +256,54 @@ class WorkbookStore:
         with self._lock:
             for order in orders:
                 self._snapshot.orders[order.order_id] = order
-                self._pending.append((schema.ORDERS_SHEET, _order_values(order)))
+                self._pending.append(Append(schema.ORDERS_SHEET, _order_values(order)))
         self.request_flush()
         return len(orders)
+
+    def update_by_key(self, sheet: str, key: dict[str, Any], values: dict[str, Any]) -> None:
+        """Queue an edit, locating the row by natural key at write time."""
+        with self._lock:
+            self._pending.append(Update(sheet, values, key=key))
+        self.request_flush()
+
+    def update_row(self, sheet: str, row: int, values: dict[str, Any],
+                   expect: Optional[dict[str, Any]] = None) -> None:
+        """Queue an edit to a specific row, for sheets with no natural key."""
+        with self._lock:
+            self._pending.append(Update(sheet, values, row=row, expect=expect))
+        self.request_flush()
+
+    def append_row(self, sheet: str, values: dict[str, Any]) -> None:
+        with self._lock:
+            self._pending.append(Append(sheet, values))
+        self.request_flush()
+
+    def record_changes(self, changes: Sequence[Change]) -> int:
+        """Write the audit trail. Append-only by nature."""
+        if not changes:
+            return 0
+        with self._lock:
+            for c in changes:
+                self._pending.append(Append(schema.CHANGELOG_SHEET, _change_values(c)))
+        self.request_flush()
+        return len(changes)
+
+    def upsert_override(self, override: RenewalOverride) -> RenewalOverride:
+        """Set or replace a manual renewal date for one employee and item."""
+        with self._lock:
+            existing = self._snapshot.overrides.get(override.key)
+            self._snapshot.overrides[override.key] = override
+            values = _override_values(override)
+            if existing is not None:
+                self._pending.append(Update(
+                    schema.OVERRIDES_SHEET, values,
+                    key={"employee_number": override.employee_number,
+                         "item_code": override.item_code},
+                ))
+            else:
+                self._pending.append(Append(schema.OVERRIDES_SHEET, values))
+        self.request_flush()
+        return override
 
     def request_flush(self) -> None:
         self._flush_requested.set()
@@ -280,12 +362,20 @@ class WorkbookStore:
 
         self._backup()
         try:
+            updates = [op for op in batch if isinstance(op, Update)]
             grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
-            for sheet, values in batch:
-                grouped[sheet].append(values)
-            for sheet, rows in grouped.items():
-                if not self._flush_fast(sheet, rows):
-                    self._flush_openpyxl(sheet, rows)
+            for op in batch:
+                if isinstance(op, Append):
+                    grouped[op.sheet].append(op.values)
+
+            if updates:
+                # Editing cells means loading the workbook properly; once it is
+                # open, appending through the same pass is free.
+                self._flush_mixed(grouped, updates)
+            else:
+                for sheet, rows in grouped.items():
+                    if not self._flush_fast(sheet, rows):
+                        self._flush_openpyxl(sheet, rows)
         except WorkbookError:
             raise
         except PermissionError as exc:
@@ -339,6 +429,54 @@ class WorkbookStore:
         finally:
             wb.close()
 
+    def _flush_mixed(
+        self, appends: dict[str, list[dict[str, Any]]], updates: Sequence[Update]
+    ) -> None:
+        """One load-modify-save pass covering both edits and new rows."""
+        tmp = self.path.with_name(f".{self.path.stem}.writing.xlsx")
+        try:
+            wb = load_workbook(self.path)
+            for op in updates:
+                ws = _find_sheet(wb, op.sheet)
+                if ws is None:
+                    raise WorkbookError(f"cannot edit {op.sheet}: sheet missing")
+                order = _append_order(ws, op.sheet)
+
+                row = _resolve_row(ws, order, op)
+                if row is None:
+                    raise WorkbookError(
+                        f"could not find the {op.sheet} row to edit — it may have been "
+                        "moved or deleted in Excel; reload and try again"
+                    )
+
+                for field_name in _unwritable([op.values], order):
+                    order.append(field_name)
+                    ws.cell(row=1, column=len(order),
+                            value=_LABELS[op.sheet].get(field_name, field_name))
+                for field_name, value in op.values.items():
+                    if field_name in order:
+                        ws.cell(row=row, column=order.index(field_name) + 1, value=value)
+
+            for sheet, rows in appends.items():
+                ws = _find_sheet(wb, sheet)
+                if ws is None:
+                    ws = wb.create_sheet(sheet)
+                    ws.append(list(_SPEC[sheet][2]))
+                order = _append_order(ws, sheet)
+                for field_name in _unwritable(rows, order):
+                    order.append(field_name)
+                    ws.cell(row=1, column=len(order),
+                            value=_LABELS[sheet].get(field_name, field_name))
+                for values in rows:
+                    ws.append(_row_for(values, order))
+
+            wb.save(tmp)
+            wb.close()
+            os.replace(tmp, self.path)
+        except Exception:
+            _quiet_unlink(tmp)
+            raise
+
     def _flush_openpyxl(self, sheet: str, rows: Sequence[dict[str, Any]]) -> None:
         """The dependable path: full load, append, atomic replace."""
         tmp = self.path.with_name(f".{self.path.stem}.writing.xlsx")
@@ -385,6 +523,7 @@ class WorkbookStore:
         self._parse_entitlements(wb, snap)
         self._parse_issuances(wb, snap)
         self._parse_orders(wb, snap)
+        self._parse_overrides(wb, snap)
         return snap
 
     def _rows(
@@ -540,6 +679,35 @@ class WorkbookStore:
             )
         snap.issuances = dict(grouped)
 
+    def _parse_overrides(self, wb: Workbook, snap: Snapshot) -> None:
+        # Optional: a workbook with no manual exceptions simply has none.
+        if _find_sheet(wb, schema.OVERRIDES_SHEET) is None:
+            return
+        for number, row, mapping in self._rows(
+            wb, schema.OVERRIDES_SHEET, schema.OVERRIDE_COLUMNS, snap
+        ):
+            emp_no = parse_text(cell(row, mapping, "employee_number"))
+            code = parse_text(cell(row, mapping, "item_code"))
+            if not emp_no or not code:
+                continue
+            due = parse_date(cell(row, mapping, "next_due"), dayfirst=self.dayfirst)
+            if due is None:
+                snap.problems.append(
+                    SheetProblem(schema.OVERRIDES_SHEET, number,
+                                 "unreadable override date — row ignored")
+                )
+                continue
+            snap.overrides[(emp_no, code)] = RenewalOverride(
+                employee_number=emp_no,
+                item_code=code,
+                next_due=due,
+                reason=parse_text(cell(row, mapping, "reason")) or "",
+                authorised_by=parse_text(cell(row, mapping, "authorised_by")) or "",
+                set_at=parse_date(cell(row, mapping, "set_at"), dayfirst=self.dayfirst) or due,
+                active=parse_bool(cell(row, mapping, "active"), True),
+                row=number,
+            )
+
     def _parse_orders(self, wb: Workbook, snap: Snapshot) -> None:
         # The Orders sheet is optional: a client who only records handovers still
         # gets a working system, they simply have nothing on order.
@@ -584,6 +752,37 @@ class WorkbookStore:
 # --------------------------------------------------------------------- helpers
 
 
+def _resolve_row(ws, order: Sequence[str], op: Update) -> Optional[int]:
+    """Find the row an edit targets, preferring the natural key over any index."""
+    if op.key:
+        columns = {f: order.index(f) for f in op.key if f in order}
+        if len(columns) != len(op.key):
+            return None
+        for number, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            if all(
+                normalise_header(row[i]) == normalise_header(op.key[f])
+                for f, i in columns.items()
+                if i < len(row)
+            ):
+                return number
+        return None
+
+    if op.row is None:
+        return None
+    if op.expect:
+        row = next(ws.iter_rows(min_row=op.row, max_row=op.row, values_only=True), None)
+        if row is None:
+            return None
+        for field_name, expected in op.expect.items():
+            if field_name not in order:
+                continue
+            index = order.index(field_name)
+            if index >= len(row) or normalise_header(row[index]) != normalise_header(expected):
+                # The sheet moved under us — refuse rather than overwrite a stranger.
+                return None
+    return op.row
+
+
 def _find_sheet(wb: Workbook, canonical: str):
     aliases = {normalise_header(a) for a in schema.SHEET_ALIASES.get(canonical, ())}
     aliases.add(normalise_header(canonical))
@@ -599,6 +798,15 @@ _SPEC = {
         schema.ISSUANCE_COLUMNS, schema.ISSUANCE_WRITE_ORDER, schema.ISSUANCE_HEADERS),
     schema.ORDERS_SHEET: (
         schema.ORDER_COLUMNS, schema.ORDER_WRITE_ORDER, schema.ORDER_HEADERS),
+    schema.OVERRIDES_SHEET: (
+        schema.OVERRIDE_COLUMNS, schema.OVERRIDE_WRITE_ORDER, schema.OVERRIDE_HEADERS),
+    schema.CHANGELOG_SHEET: (
+        schema.CHANGE_COLUMNS, schema.CHANGE_WRITE_ORDER, schema.CHANGE_HEADERS),
+    schema.EMPLOYEES_SHEET: (
+        schema.EMPLOYEE_COLUMNS, tuple(c.field for c in schema.EMPLOYEE_COLUMNS),
+        schema.EMPLOYEE_HEADERS),
+    schema.ITEMS_SHEET: (
+        schema.ITEM_COLUMNS, tuple(c.field for c in schema.ITEM_COLUMNS), schema.ITEM_HEADERS),
 }
 
 #: field name -> the header text to create if that column does not exist yet.
@@ -657,6 +865,31 @@ def _issuance_values(iss: Issuance) -> dict[str, Any]:
     }
 
 
+def _override_values(o: RenewalOverride) -> dict[str, Any]:
+    return {
+        "employee_number": o.employee_number,
+        "item_code": o.item_code,
+        "next_due": o.next_due,
+        "reason": o.reason,
+        "authorised_by": o.authorised_by,
+        "set_at": o.set_at,
+        "active": "Yes" if o.active else "No",
+    }
+
+
+def _change_values(c: Change) -> dict[str, Any]:
+    return {
+        "at": c.at.replace(microsecond=0),
+        "who": c.who,
+        "record_type": c.record_type,
+        "record_id": c.record_id,
+        "field": c.field,
+        "old_value": c.old_value,
+        "new_value": c.new_value,
+        "reason": c.reason,
+    }
+
+
 def _order_values(order: Order) -> dict[str, Any]:
     return {
         "order_id": order.order_id,
@@ -711,6 +944,8 @@ def create_blank_workbook(path: str | Path) -> Path:
         (schema.ENTITLEMENTS_SHEET, schema.ENTITLEMENT_HEADERS),
         (schema.ISSUANCES_SHEET, schema.ISSUANCE_HEADERS),
         (schema.ORDERS_SHEET, schema.ORDER_HEADERS),
+        (schema.OVERRIDES_SHEET, schema.OVERRIDE_HEADERS),
+        (schema.CHANGELOG_SHEET, schema.CHANGE_HEADERS),
     ):
         wb.create_sheet(sheet).append(list(headers))
     wb.save(target)

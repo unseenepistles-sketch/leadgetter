@@ -1,7 +1,14 @@
-{% extends "base.html" %}{% from "_macros.html" import status_pill, due_cell %}
+{% extends "base.html" %}{% from "_macros.html" import status_pill, due_cell, order_pill %}
 {% block title %}{{ employee.full_name }}{% endblock %}
 {% block body %}
-<h1>{{ employee.full_name }}</h1>
+<div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+  <h1>{{ employee.full_name }}</h1>
+  <span style="flex:1"></span>
+  <a href="/employees/{{ employee.employee_number }}/edit" style="text-decoration:none">
+    <button type="button" class="ghost">Edit details</button></a>
+  <a href="/orders/new?employee={{ employee.employee_number }}" style="text-decoration:none">
+    <button type="button">Order uniform</button></a>
+</div>
 <p class="sub">{{ employee.employee_number }} &middot; {{ employee.role or 'no role' }}
    &middot; {{ employee.department or 'no department' }}</p>
 
@@ -43,23 +50,74 @@
 <div class="panel scroll">
   <h2>Entitlements and status</h2>
   <table>
-    <thead><tr><th>Item</th><th>Qty</th><th>Cycle</th><th>Last issued</th><th>Next due</th><th>Status</th></tr></thead>
+    <thead><tr><th>Item</th><th>Qty</th><th>Cycle</th><th>Last issued</th><th>Next due</th>
+      <th>Status</th><th>Renewal date</th></tr></thead>
     <tbody>
     {% for s in statuses %}
+      {% set ov = overrides.get(s.item_code) %}
       <tr>
         <td>{{ s.item_name }}</td>
         <td>{{ s.quantity }}</td>
         <td>{{ s.cycle_months }} months</td>
         <td>{{ s.last_issued.strftime('%d %b %Y') if s.last_issued else '—' }}</td>
-        <td>{{ due_cell(s) }}</td>
+        <td>{{ due_cell(s) }}{% if ov %} <span class="pill o-partially_delivered">manual</span>{% endif %}</td>
         <td>{{ status_pill(s.status.value) }}</td>
+        <td>
+          {% if ov %}
+            <form method="post" action="/employees/{{ employee.employee_number }}/override"
+                  style="display:flex;gap:6px;align-items:center">
+              <input type="hidden" name="item_code" value="{{ s.item_code }}">
+              <input type="hidden" name="clear" value="1">
+              <input name="authorised_by" placeholder="Your name" required style="width:118px"
+                     aria-label="Who is clearing this override">
+              <button type="submit" class="ghost">Use calculated</button>
+            </form>
+            <span class="muted" style="font-size:12px">{{ ov.reason }} — {{ ov.authorised_by }}</span>
+          {% else %}
+            <details><summary class="muted" style="cursor:pointer;font-size:13px">Override</summary>
+              <form method="post" action="/employees/{{ employee.employee_number }}/override"
+                    style="display:flex;gap:6px;align-items:center;margin-top:7px;flex-wrap:wrap">
+                <input type="hidden" name="item_code" value="{{ s.item_code }}">
+                <input type="date" name="next_due" required style="width:150px"
+                       aria-label="New renewal date for {{ s.item_name }}">
+                <input name="reason" placeholder="Reason" required style="width:150px">
+                <input name="authorised_by" placeholder="Authorised by" required style="width:140px">
+                <button type="submit" class="ghost">Set</button>
+              </form>
+            </details>
+          {% endif %}
+        </td>
       </tr>
     {% else %}
-      <tr><td colspan="6" class="muted">No entitlements found for this role.</td></tr>
+      <tr><td colspan="7" class="muted">No entitlements found for this role.</td></tr>
     {% endfor %}
     </tbody>
   </table>
 </div>
+
+{% if orders %}
+<div class="panel scroll">
+  <h2>Orders</h2>
+  <table>
+    <thead><tr><th>Order</th><th>Item</th><th>Requested</th><th class="right">Qty</th>
+      <th class="right">Delivered</th><th class="right">Outstanding</th><th>Status</th><th>Remarks</th></tr></thead>
+    <tbody>
+    {% for l in orders %}
+      <tr>
+        <td class="muted">{{ l.order.order_id }}</td>
+        <td>{{ l.item_name }}</td>
+        <td>{{ l.order.ordered_date.strftime('%d %b %Y') }}</td>
+        <td class="right">{{ l.order.quantity }}</td>
+        <td class="right">{{ l.delivered }}</td>
+        <td class="right">{{ l.pending or '—' }}</td>
+        <td>{{ order_pill(l.status.value) }}</td>
+        <td class="muted">{{ l.order.notes or '' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
 
 <div class="panel scroll">
   <h2>Issuance history</h2>

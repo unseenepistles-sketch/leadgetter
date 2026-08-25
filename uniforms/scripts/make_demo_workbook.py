@@ -40,11 +40,11 @@ LAST = [
 
 # Mirrors the operations department this is being built for: a tram network,
 # where the uniform is customer-facing and the renewal cycle is a real policy.
+# The three staff categories named in the requirements, nothing else.
 DEPARTMENTS = {
-    "Operations": ["Controller", "Line Supervisor"],
+    "OMCC": ["OMCC Controller"],
+    "Operations": ["Line Supervisor"],
     "Drivers": ["Tram Driver"],
-    "Stations": ["Station Assistant", "Line Supervisor"],
-    "Depot": ["Depot Technician"],
 }
 
 # The catalogue and cycles the department already uses. Shirts and trousers wear
@@ -56,25 +56,20 @@ ITEMS = [
     ("JACKET", "Jacket", "Blazer", 24, 1, "blazer"),
     ("WAISTCOAT", "Waist Coat", "Blazer", 24, 1, "blazer"),
     ("WINTERJKT", "Winter Jacket", "Blazer", 24, 1, "blazer"),
-    ("SHOES", "Shoes", "Shoe", 24, 1, "shoe"),
+    ("SHOES", "Safety Shoes", "Shoe", 24, 1, "shoe"),
     ("TIE", "Tie", "Accessory", 24, 1, None),
     ("BELT", "Belt", "Accessory", 24, 1, None),
-    ("SCARF", "Head Scarf", "Accessory", 24, 1, None),
     ("BADGE", "Name Badge", "Accessory", 24, 1, None),
 ]
 
 # Which kit each role gets. Deliberately varied so the report is not uniform.
 ENTITLEMENTS = {
-    "Controller": [("SHIRT", 3), ("TROUSER", 2), ("JACKET", 1), ("WAISTCOAT", 1),
-                   ("SHOES", 1), ("TIE", 1), ("BADGE", 1)],
+    "OMCC Controller": [("SHIRT", 3), ("TROUSER", 2), ("JACKET", 1), ("WAISTCOAT", 1),
+                        ("WINTERJKT", 1), ("SHOES", 1), ("TIE", 1), ("BELT", 1), ("BADGE", 1)],
     "Line Supervisor": [("SHIRT", 3), ("TROUSER", 2), ("JACKET", 1), ("WAISTCOAT", 1),
                         ("WINTERJKT", 1), ("SHOES", 1), ("TIE", 1), ("BELT", 1), ("BADGE", 1)],
-    "Tram Driver": [("SHIRT", 3), ("TROUSER", 2), ("JACKET", 1), ("SHOES", 1),
-                    ("TIE", 1), ("BELT", 1), ("BADGE", 1)],
-    "Station Assistant": [("SHIRT", 3), ("TROUSER", 2), ("WAISTCOAT", 1), ("SHOES", 1),
-                          ("SCARF", 1), ("BADGE", 1)],
-    "Depot Technician": [("SHIRT", 3), ("TROUSER", 2), ("WINTERJKT", 1), ("SHOES", 1),
-                         ("BELT", 1), ("BADGE", 1)],
+    "Tram Driver": [("SHIRT", 3), ("TROUSER", 2), ("JACKET", 1), ("WAISTCOAT", 1),
+                    ("SHOES", 1), ("TIE", 1), ("BELT", 1), ("BADGE", 1)],
 }
 
 SHIRT_SIZES = ["S", "M", "L", "XL", "XXL"]
