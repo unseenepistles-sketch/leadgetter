@@ -13,7 +13,7 @@ os.environ["SHEETS_ENABLED"] = "false"
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.main import app  # noqa: E402
-from app.services import ads, creators, leads  # noqa: E402
+from app.services import ads, campaigns, creators, leads  # noqa: E402
 from app.database import SessionLocal, init_db  # noqa: E402
 
 init_db()
@@ -53,13 +53,17 @@ def test_discovery_persists_and_dedupes():
 def test_lead_capture_requires_consent():
     db = SessionLocal()
     try:
-        lead, msg = leads.capture(db, email="a@b.com", consent=False)
-        assert lead is None and "consent" in msg.lower()
+        lead, msg, created = leads.capture(db, email="a@b.com", consent=False)
+        assert lead is None and created is False and "consent" in msg.lower()
 
-        lead, msg = leads.capture(db, email="a@b.com", consent=True, ip="1.2.3.4")
-        assert lead is not None
+        lead, msg, created = leads.capture(db, email="a@b.com", consent=True, ip="1.2.3.4")
+        assert lead is not None and created is True
         assert lead.consent is True and lead.consent_ts is not None
         assert lead.unsubscribe_token
+
+        # A repeat submission is not a new create (welcome fires only once).
+        lead2, _, created2 = leads.capture(db, email="a@b.com", consent=True)
+        assert lead2.id == lead.id and created2 is False
 
         # Unsubscribe works via token.
         assert leads.unsubscribe(db, lead.unsubscribe_token) is True
@@ -72,8 +76,26 @@ def test_lead_capture_requires_consent():
 def test_invalid_email_rejected():
     db = SessionLocal()
     try:
-        lead, msg = leads.capture(db, email="not-an-email", consent=True)
-        assert lead is None and "valid" in msg.lower()
+        lead, msg, created = leads.capture(db, email="not-an-email", consent=True)
+        assert lead is None and created is False and "valid" in msg.lower()
+    finally:
+        db.close()
+
+
+def test_welcome_email_delivers_lead_magnet():
+    # Welcome copy includes the lead-magnet link, and send is a logged dry-run.
+    subject, body = campaigns.welcome_content("free first chapter",
+                                              "https://example.com/chapter.pdf")
+    assert "free first chapter" in subject
+    assert "https://example.com/chapter.pdf" in body
+
+    db = SessionLocal()
+    try:
+        lead, _, created = leads.capture(db, email="welcome@example.com", consent=True)
+        assert created is True
+        result = campaigns.send_welcome(db, lead, "free first chapter",
+                                        "https://example.com/chapter.pdf")
+        assert result["ok"] is True  # dry-run success (no SMTP configured)
     finally:
         db.close()
 

@@ -16,6 +16,10 @@ _DEFAULTS = {
     "niche": "",
     "location": "",
     "platform": "instagram",
+    # Where the freebie lives + optional custom welcome copy. When someone opts
+    # in they're emailed this link automatically (see services/campaigns.py).
+    "lead_magnet_url": "",
+    "welcome_body": "",
 }
 
 

@@ -30,7 +30,7 @@
 
 <div class="card">
   <h2>Your offer</h2>
-  <p class="note">Shared by outreach drafts, the opt-in page, and campaigns.</p>
+  <p class="note">Shared by outreach drafts, the opt-in page, and the welcome email.</p>
   <form method="post" action="/settings">
     <div class="row">
       <div><label>What you're promoting</label>
@@ -38,6 +38,10 @@
       <div><label>Your name / brand</label>
         <input name="sender_name" value="{{ state.sender_name }}" placeholder="e.g. Nick"></div>
     </div>
+    <label>Lead-magnet link <span class="note">— emailed automatically the moment someone opts in</span></label>
+    <input name="lead_magnet_url" value="{{ state.lead_magnet_url }}" placeholder="https://… link to your free chapter / PDF / video">
+    <label>Welcome email — custom text <span class="note">(optional; leave blank for an auto-written one)</span></label>
+    <textarea name="welcome_body" placeholder="Leave blank and we'll write a friendly welcome that includes your lead-magnet link.">{{ state.welcome_body }}</textarea>
     <button type="submit">Save</button>
   </form>
 </div>

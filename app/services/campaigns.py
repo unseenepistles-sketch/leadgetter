@@ -143,8 +143,71 @@ def _deliver(server, settings, lead: Lead, subject: str, body: str) -> tuple[boo
         return False, str(exc)[:200]
 
 
+def send_single(lead: Lead, subject: str, body: str) -> tuple[bool, str]:
+    """Deliver one email (opens its own SMTP connection). Dry-run when SMTP off."""
+    settings = get_settings()
+    body = _personalise(body, lead, settings.app_base_url)
+    if not settings.email_live:
+        log.info("Dry-run email to %s: %s", lead.email, subject)
+        return True, "dry-run (SMTP not configured)"
+    server = _smtp_connect()
+    try:
+        return _deliver(server, settings, lead, subject, body)
+    finally:
+        try:
+            server.quit()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def welcome_content(offer: str, lead_magnet_url: str = "",
+                    welcome_body: str = "") -> tuple[str, str]:
+    """Build the (subject, body) of the opt-in welcome / lead-magnet email."""
+    subject = f"Here's your {offer}" if offer else "Welcome — here's what you signed up for"
+    if welcome_body.strip():
+        return subject, welcome_body
+    link = f"\n\n👉 Grab it here: {lead_magnet_url}" if lead_magnet_url else ""
+    thing = offer or "what you asked for"
+    body = (
+        f"Thanks for signing up — here's {thing}.{link}\n\n"
+        f"I'll share more good stuff soon. Just hit reply any time; a real person "
+        f"(me) reads every message."
+    )
+    return subject, body
+
+
+def get_or_create_welcome_campaign(db: Session) -> Campaign:
+    """A single persistent campaign row that welcome sends are logged against."""
+    campaign = db.execute(
+        select(Campaign).where(Campaign.name == "Welcome email")
+    ).scalar_one_or_none()
+    if campaign is None:
+        campaign = Campaign(name="Welcome email", niche="", subject="", body="",
+                            status="auto")
+        db.add(campaign)
+        db.commit()
+        db.refresh(campaign)
+    return campaign
+
+
+def send_welcome(db: Session, lead: Lead, offer: str, lead_magnet_url: str = "",
+                 welcome_body: str = "") -> dict:
+    """Send the welcome/lead-magnet email to a new subscriber and log it."""
+    subject, body = welcome_content(offer, lead_magnet_url, welcome_body)
+    ok, detail = send_single(lead, subject, body)
+    campaign = get_or_create_welcome_campaign(db)
+    db.add(EmailEvent(
+        campaign_id=campaign.id, lead_id=lead.id,
+        status="sent" if ok else "failed", detail=f"welcome: {detail}",
+    ))
+    db.commit()
+    return {"ok": ok, "detail": detail}
+
+
 def stats(db: Session) -> dict:
-    total = db.execute(select(func.count(Campaign.id))).scalar_one()
+    total = db.execute(
+        select(func.count(Campaign.id)).where(Campaign.status != "auto")
+    ).scalar_one()
     sent_events = db.execute(
         select(func.count(EmailEvent.id)).where(EmailEvent.status == "sent")
     ).scalar_one()

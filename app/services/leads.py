@@ -24,16 +24,19 @@ def valid_email(email: str) -> bool:
 
 
 def capture(db: Session, *, email: str, name: str = "", niche: str = "",
-            source: str = "landing", consent: bool, ip: str = "") -> tuple[Lead | None, str]:
-    """Create or reactivate a lead. Returns (lead, message).
+            source: str = "landing", consent: bool,
+            ip: str = "") -> tuple[Lead | None, str, bool]:
+    """Create or reactivate a lead. Returns (lead, message, created).
 
-    Consent is mandatory — without it we refuse to store the contact.
+    `created` is True only for a brand-new subscriber, so callers can send the
+    welcome/lead-magnet email exactly once. Consent is mandatory — without it we
+    refuse to store the contact.
     """
     email = (email or "").strip().lower()
     if not valid_email(email):
-        return None, "Please enter a valid email address."
+        return None, "Please enter a valid email address.", False
     if not consent:
-        return None, "We can only add you if you tick the consent box."
+        return None, "We can only add you if you tick the consent box.", False
 
     existing = db.execute(select(Lead).where(Lead.email == email)).scalar_one_or_none()
     if existing:
@@ -47,7 +50,7 @@ def capture(db: Session, *, email: str, name: str = "", niche: str = "",
         db.commit()
         db.refresh(existing)
         _sync(existing)
-        return existing, "You're already on the list — welcome back!"
+        return existing, "You're already on the list — welcome back!", False
 
     lead = Lead(
         email=email,
@@ -64,7 +67,7 @@ def capture(db: Session, *, email: str, name: str = "", niche: str = "",
     db.commit()
     db.refresh(lead)
     _sync(lead)
-    return lead, "Thanks — you're in. Check your inbox."
+    return lead, "Thanks — you're in. Check your inbox.", True
 
 
 def unsubscribe(db: Session, token: str) -> bool:

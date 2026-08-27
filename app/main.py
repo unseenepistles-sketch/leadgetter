@@ -48,7 +48,8 @@ def dashboard(request: Request, db: Session = Depends(get_session)):
         select(Creator).order_by(Creator.followers.desc()).limit(50)
     ).scalars())
     campaign_rows = list(db.execute(
-        select(Campaign).order_by(Campaign.created_at.desc()).limit(10)
+        select(Campaign).where(Campaign.status != "auto")
+        .order_by(Campaign.created_at.desc()).limit(10)
     ).scalars())
     ctx = {
         "request": request,
@@ -72,8 +73,10 @@ def dashboard(request: Request, db: Session = Depends(get_session)):
 
 
 @app.post("/settings")
-def save_settings(offer: str = Form(""), sender_name: str = Form("")):
-    state.save(offer=offer, sender_name=sender_name)
+def save_settings(offer: str = Form(""), sender_name: str = Form(""),
+                  lead_magnet_url: str = Form(""), welcome_body: str = Form("")):
+    state.save(offer=offer, sender_name=sender_name,
+               lead_magnet_url=lead_magnet_url, welcome_body=welcome_body)
     return RedirectResponse("/?msg=Settings+saved", status_code=303)
 
 
@@ -121,12 +124,19 @@ def subscribe(request: Request, db: Session = Depends(get_session),
               email: str = Form(...), name: str = Form(""),
               consent: str = Form(""), source: str = Form("landing")):
     st = state.load()
-    lead, message = leads.capture(
+    lead, message, created = leads.capture(
         db, email=email, name=name, niche=st.get("niche", ""),
         source=source, consent=consent in {"on", "true", "1", "yes"},
         ip=_client_ip(request),
     )
     ok = lead is not None
+    if ok and created:
+        # Deliver the freebie immediately. Best-effort — never break the opt-in.
+        try:
+            campaigns.send_welcome(db, lead, st.get("offer", ""),
+                                   st.get("lead_magnet_url", ""), st.get("welcome_body", ""))
+        except Exception:  # noqa: BLE001
+            pass
     return templates.TemplateResponse(request, "thanks.html", {
         "ok": ok, "message": message,
     }, status_code=200 if ok else 400)
