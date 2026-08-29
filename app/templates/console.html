@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LeadSystem Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F4F7F5; --surface:#FFFFFF; --surface-2:#EDF3F0; --inset:#F0F4F2;
+    --ink:#12211C; --muted:#54655D; --faint:#8A9A92; --line:#DBE5E0; --line-2:#E8EEEB;
+    --accent:#0B7F57; --accent-press:#096A49; --accent-2:#0E6F9E; --on-accent:#FFFFFF;
+    --good:#0B7F57; --good-bg:rgba(11,127,87,.10);
+    --warn:#B4791A; --warn-bg:rgba(180,121,26,.12);
+    --bad:#B23A2E; --bad-bg:rgba(178,58,46,.09);
+    --shadow:0 1px 2px rgba(18,33,28,.05), 0 10px 26px rgba(18,33,28,.05);
+    --font-display:"Bricolage Grotesque", system-ui, sans-serif;
+    --font-body:"IBM Plex Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0D1411; --surface:#151F1B; --surface-2:#1B2723; --inset:#101917;
+      --ink:#E9F0EC; --muted:#93A39B; --faint:#6F817A; --line:#26322D; --line-2:#1E2925;
+      --accent:#5FE0A8; --accent-press:#7FE9BA; --accent-2:#5CC5F2; --on-accent:#0D1411;
+      --good:#5FE0A8; --good-bg:rgba(95,224,168,.12);
+      --warn:#E9C069; --warn-bg:rgba(233,192,105,.13);
+      --bad:#F1917F; --bad-bg:rgba(241,145,127,.12);
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 32px rgba(0,0,0,.38);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0D1411; --surface:#151F1B; --surface-2:#1B2723; --inset:#101917;
+    --ink:#E9F0EC; --muted:#93A39B; --faint:#6F817A; --line:#26322D; --line-2:#1E2925;
+    --accent:#5FE0A8; --accent-press:#7FE9BA; --accent-2:#5CC5F2; --on-accent:#0D1411;
+    --good:#5FE0A8; --good-bg:rgba(95,224,168,.12);
+    --warn:#E9C069; --warn-bg:rgba(233,192,105,.13);
+    --bad:#F1917F; --bad-bg:rgba(241,145,127,.12);
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 32px rgba(0,0,0,.38);
+  }
+  *{ box-sizing:border-box; }
+  [hidden]{ display:none !important; }
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-body);
+    font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased; }
+  h1,h2,h3,h4{ font-family:var(--font-display); letter-spacing:-.01em; }
+  .appbar{ position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:12px;
+    padding:12px 18px; background:color-mix(in srgb, var(--surface) 90%, transparent);
+    backdrop-filter:saturate(1.4) blur(10px); border-bottom:1px solid var(--line); }
+  .brand{ display:flex; align-items:center; gap:9px; font-family:var(--font-display); font-weight:700; font-size:1.05rem; }
+  .brand .glyph{ width:22px; height:22px; border-radius:6px; display:grid; place-items:center; background:var(--accent); color:var(--on-accent); font-size:.8rem; }
+  .demo{ font-family:var(--font-mono); font-size:.64rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); background:var(--good-bg); border:1px solid color-mix(in srgb, var(--accent) 30%, transparent); padding:3px 7px; border-radius:6px; }
+  .spacer{ flex:1; }
+  .icon-btn{ font-family:var(--font-mono); cursor:pointer; background:var(--surface); color:var(--ink); border:1px solid var(--line); border-radius:9px; height:36px; min-width:36px; padding:0 10px; display:inline-grid; place-items:center; font-size:.82rem; font-weight:600; }
+  .icon-btn:hover{ border-color:var(--accent); }
+  .icon-btn:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .tabs{ position:sticky; top:61px; z-index:15; display:flex; gap:2px; overflow-x:auto; padding:8px 12px; background:var(--bg); border-bottom:1px solid var(--line-2); scrollbar-width:none; }
+  .tabs::-webkit-scrollbar{ display:none; }
+  .tab{ flex:none; font-family:var(--font-mono); font-size:.78rem; font-weight:600; color:var(--muted); background:transparent; border:1px solid transparent; border-radius:9px; padding:8px 13px; cursor:pointer; white-space:nowrap; }
+  .tab:hover{ color:var(--ink); background:var(--surface-2); }
+  .tab.active{ color:var(--on-accent); background:var(--accent); }
+  .tab:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .view{ max-width:1000px; margin:0 auto; padding:22px 18px 90px; }
+  .view-head{ margin:0 0 18px; }
+  .view-head h2{ font-size:1.5rem; margin:0 0 4px; }
+  .view-head p{ margin:0; color:var(--muted); font-size:.95rem; }
+  .tiles{ display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:20px; }
+  .tile{ background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:15px 16px; box-shadow:var(--shadow); }
+  .tile .num{ font-family:var(--font-display); font-weight:700; font-size:1.9rem; line-height:1; font-variant-numeric:tabular-nums; }
+  .tile .lbl{ display:block; margin-top:7px; font-family:var(--font-mono); font-size:.66rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); }
+  .tile.accent .num{ color:var(--accent); }
+  .card{ background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:20px; box-shadow:var(--shadow); margin-bottom:18px; }
+  .card > h3{ margin:0 0 4px; font-size:1.12rem; }
+  .card > .sub{ margin:0 0 16px; color:var(--muted); font-size:.9rem; }
+  .card.flush{ padding:0; overflow:hidden; }
+  .field{ margin-bottom:12px; }
+  .field label{ display:block; font-size:.78rem; color:var(--muted); margin-bottom:5px; font-weight:500; }
+  input,select,textarea{ width:100%; font:inherit; color:var(--ink); background:var(--inset); border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+  input::placeholder,textarea::placeholder{ color:var(--faint); }
+  input:focus,select:focus,textarea:focus{ outline:2px solid var(--accent); outline-offset:1px; border-color:transparent; }
+  textarea{ min-height:96px; resize:vertical; line-height:1.5; }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:520px){ .grid2{ grid-template-columns:1fr; } }
+  .btn{ font:inherit; font-weight:600; cursor:pointer; border:1px solid transparent; border-radius:10px; padding:10px 16px; background:var(--accent); color:var(--on-accent); display:inline-flex; align-items:center; gap:7px; text-decoration:none; }
+  .btn:hover{ background:var(--accent-press); }
+  .btn:active{ transform:translateY(1px); }
+  .btn:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .btn.sec{ background:var(--surface-2); color:var(--ink); border-color:var(--line); }
+  .btn.sec:hover{ background:var(--inset); border-color:var(--accent); }
+  .btn.ghost{ background:transparent; color:var(--accent-2); border-color:transparent; padding:7px 10px; }
+  .btn.sm{ padding:7px 11px; font-size:.82rem; border-radius:9px; }
+  .btn[disabled]{ opacity:.55; cursor:progress; }
+  .btn-row{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  .pill{ font-family:var(--font-mono); font-size:.68rem; font-weight:600; padding:3px 9px; border-radius:999px; border:1px solid var(--line); color:var(--muted); white-space:nowrap; }
+  .pill.ok{ color:var(--accent); border-color:color-mix(in srgb,var(--accent) 34%,transparent); background:var(--good-bg); }
+  .pill.warn{ color:var(--warn); border-color:color-mix(in srgb,var(--warn) 34%,transparent); background:var(--warn-bg); }
+  .table-wrap{ overflow-x:auto; }
+  table{ width:100%; border-collapse:collapse; font-size:.9rem; }
+  th,td{ text-align:left; padding:11px 14px; border-bottom:1px solid var(--line-2); vertical-align:middle; }
+  th{ font-family:var(--font-mono); font-size:.66rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); }
+  tbody tr:last-child td{ border-bottom:0; }
+  td .who{ font-weight:600; }
+  td .hand{ color:var(--muted); font-size:.82rem; }
+  .num-cell{ font-variant-numeric:tabular-nums; font-weight:600; }
+  .msg{ white-space:pre-wrap; font-size:.86rem; line-height:1.55; background:var(--inset); border:1px solid var(--line-2); border-left:2px solid var(--accent); border-radius:0 10px 10px 0; padding:12px 14px; margin-top:10px; color:var(--ink); }
+  .chips{ display:flex; flex-wrap:wrap; gap:7px; }
+  .chip{ font-family:var(--font-mono); font-size:.76rem; background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:5px 9px; }
+  .status-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--line-2); }
+  .status-row:last-child{ border-bottom:0; }
+  .status-row .k{ font-size:.9rem; }
+  .status-row .k small{ display:block; color:var(--faint); font-size:.76rem; }
+  .feed .row{ display:grid; grid-template-columns:auto 1fr auto; gap:11px; align-items:baseline; padding:10px 0; border-bottom:1px solid var(--line-2); }
+  .feed .row:last-child{ border-bottom:0; }
+  .feed .dot{ width:8px; height:8px; border-radius:50%; background:var(--accent); transform:translateY(4px); }
+  .feed .dot.blue{ background:var(--accent-2); }
+  .feed .dot.warn{ background:var(--warn); }
+  .feed .txt{ font-size:.9rem; }
+  .feed .t{ font-family:var(--font-mono); font-size:.68rem; color:var(--faint); white-space:nowrap; }
+  .empty{ text-align:center; padding:26px 16px; color:var(--muted); }
+  .empty .big{ font-family:var(--font-display); font-weight:600; color:var(--ink); font-size:1.05rem; margin-bottom:4px; }
+  .note{ color:var(--muted); font-size:.85rem; }
+  .landing{ max-width:460px; margin:6px auto; }
+  .landing .card{ padding:26px; }
+  .landing h3{ font-size:1.5rem; margin:0 0 6px; }
+  .consent{ display:flex; gap:10px; align-items:flex-start; margin:14px 0 4px; }
+  .consent input{ width:auto; margin-top:3px; }
+  .consent label{ margin:0; font-size:.82rem; color:var(--ink); }
+  .badge-line{ display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+  .toasts{ position:fixed; left:0; right:0; bottom:16px; z-index:50; display:flex; flex-direction:column; align-items:center; gap:8px; pointer-events:none; padding:0 12px; }
+  .toast{ pointer-events:auto; max-width:440px; width:100%; background:var(--ink); color:var(--bg); border-radius:11px; padding:11px 15px; font-size:.88rem; font-weight:500; box-shadow:0 10px 30px rgba(0,0,0,.3); display:flex; gap:9px; align-items:center; }
+  .toast .tick{ color:var(--accent); font-weight:700; }
+  @media (prefers-reduced-motion: no-preference){ .toast{ animation:pop .25s ease; } @keyframes pop{ from{ opacity:0; transform:translateY(8px); } } }
+  footer{ max-width:1000px; margin:0 auto; padding:8px 18px 40px; color:var(--faint); font-size:.8rem; }
+</style>
+</head>
+<body>
+<div class="appbar">
+  <span class="brand"><span class="glyph">◆</span>LeadSystem</span>
+  <span class="demo" id="mode-pill">Console</span>
+  <span class="spacer"></span>
+  <button class="icon-btn" id="theme" aria-label="Toggle theme" title="Toggle theme">☾</button>
+</div>
+
+<nav class="tabs" id="tabs" aria-label="Sections">
+  <button class="tab active" data-view="dashboard">Dashboard</button>
+  <button class="tab" data-view="discover">Discover</button>
+  <button class="tab" data-view="optin">Opt-in page</button>
+  <button class="tab" data-view="campaigns">Campaigns</button>
+  <button class="tab" data-view="leads">Leads</button>
+</nav>
+
+<section class="view" id="view-dashboard">
+  <div class="view-head"><h2>Dashboard</h2><p>Your whole funnel at a glance. Everything you do across the tabs shows up here.</p></div>
+  <div class="tiles">
+    <div class="tile accent"><span class="num" id="t-creators">0</span><span class="lbl">Creators found</span></div>
+    <div class="tile accent"><span class="num" id="t-leads">0</span><span class="lbl">Opted-in leads</span></div>
+    <div class="tile accent"><span class="num" id="t-emails">0</span><span class="lbl">Emails sent</span></div>
+    <div class="tile"><span class="num" id="t-campaigns">0</span><span class="lbl">Campaigns</span></div>
+  </div>
+  <div class="card">
+    <h3>Your offer</h3><p class="sub">Feeds outreach drafts, the opt-in page, and the welcome email.</p>
+    <form id="settings-form">
+      <div class="grid2">
+        <div class="field"><label>What you're promoting</label><input id="s-offer" placeholder="e.g. my book + free first chapter"></div>
+        <div class="field"><label>Your name / brand</label><input id="s-sender" placeholder="e.g. Nick"></div>
+      </div>
+      <div class="field"><label>Lead-magnet link (emailed on opt-in)</label><input id="s-magnet" placeholder="https://… your free chapter / PDF / video"></div>
+      <button class="btn" type="submit">Save offer</button>
+    </form>
+  </div>
+  <div class="card">
+    <h3>System status</h3><p class="sub">Live state of every integration. Add keys to flip these on.</p>
+    <div class="status-row"><span class="k">AI drafting<small>writes outreach + campaigns</small></span><span class="pill" id="st-ai">—</span></div>
+    <div class="status-row"><span class="k">Creator discovery<small>finds & ranks creators</small></span><span class="pill" id="st-disc">—</span></div>
+    <div class="status-row"><span class="k">Email sending<small>welcome + campaigns</small></span><span class="pill" id="st-email">—</span></div>
+    <div class="status-row"><span class="k">Google Sheets<small>mirror of leads + creators</small></span><span class="pill" id="st-sheets">—</span></div>
+  </div>
+  <div class="card"><h3>Activity</h3><p class="sub">What triggered what — newest first.</p><div class="feed" id="feed"></div></div>
+</section>
+
+<section class="view" id="view-discover" hidden>
+  <div class="view-head"><h2>Find top creators</h2><p>Name a niche → get the top creators, ranked by following. Then reach their audience the compliant way.</p></div>
+  <div class="card">
+    <form id="discover-form">
+      <div class="grid2">
+        <div class="field"><label>Niche / search terms</label><input id="d-niche" placeholder="e.g. christianity awakening spirituality" required></div>
+        <div class="field"><label>Location (optional)</label><input id="d-location" placeholder="e.g. Kenya"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Platform</label><select id="d-platform"><option>instagram</option><option>youtube</option><option>tiktok</option></select></div>
+        <div class="field"><label>How many</label><input type="number" id="d-limit" value="12" min="1" max="24"></div>
+      </div>
+      <button class="btn" type="submit" id="d-btn">Discover creators</button>
+    </form>
+  </div>
+  <div class="card flush" id="creators-card" hidden>
+    <div style="padding:16px 20px 6px"><h3 style="margin:0">Top creators <span class="note" id="creators-count"></span></h3></div>
+    <div class="table-wrap"><table><thead><tr><th>Creator</th><th>Platform</th><th>Followers</th><th></th></tr></thead><tbody id="creators-body"></tbody></table></div>
+  </div>
+  <div class="card" id="ads-card" hidden>
+    <h3>Reach their followers — the compliant way</h3>
+    <p class="sub">You can't lawfully scrape followers' contacts. These reach the same audience through the front door.</p>
+    <p class="note" style="margin:0 0 6px"><b>Interest keywords</b> for Meta / TikTok ad targeting:</p>
+    <div class="chips" id="keywords" style="margin-bottom:16px"></div>
+    <div class="btn-row"><a class="btn sec sm" href="/export/audience.csv">Download ad-audience CSV</a><span class="note">Paste into Ads Manager · targets these creators' audiences at scale</span></div>
+  </div>
+</section>
+
+<section class="view" id="view-optin" hidden>
+  <div class="view-head"><h2>Opt-in page</h2><p>This is what your audience sees. Submitting adds a real lead and fires the welcome email. Public version: <a href="/landing">/landing</a></p></div>
+  <div class="landing"><div class="card">
+    <h3 id="landing-title">Get our free guide</h3>
+    <p class="note">Drop your email and I'll send it right over. No spam — unsubscribe any time.</p>
+    <form id="optin-form" style="margin-top:14px">
+      <div class="field"><label>Your name (optional)</label><input id="o-name" placeholder="First name"></div>
+      <div class="field"><label>Email address</label><input type="email" id="o-email" placeholder="you@example.com" required></div>
+      <div class="consent"><input type="checkbox" id="o-consent" required><label for="o-consent">Yes, email me <span id="o-offer">the guide</span> and occasional related updates. I can unsubscribe any time.</label></div>
+      <button class="btn" type="submit" style="width:100%; justify-content:center; margin-top:6px">Send it to me →</button>
+    </form>
+    <div class="badge-line"><span class="pill ok">consent logged</span><span class="pill ok">unsubscribe built in</span><span class="pill ok">welcome auto-sent</span></div>
+  </div></div>
+</section>
+
+<section class="view" id="view-campaigns" hidden>
+  <div class="view-head"><h2>Campaigns</h2><p>Draft an email with AI and send it — only to people who opted in, each with an unsubscribe link.</p></div>
+  <div class="card">
+    <h3>New campaign</h3><p class="sub">The draft uses your saved offer. Sends go only to subscribed leads.</p>
+    <form id="campaign-form">
+      <div class="grid2">
+        <div class="field"><label>Campaign name</label><input id="c-name" placeholder="e.g. Launch week" required></div>
+        <div class="field"><label>Goal (optional)</label><input id="c-goal" placeholder="e.g. drive pre-orders"></div>
+      </div>
+      <button class="btn" type="submit" id="c-btn">Draft with AI</button>
+    </form>
+  </div>
+  <div id="campaigns-list"></div>
+</section>
+
+<section class="view" id="view-leads" hidden>
+  <div class="view-head"><h2>Leads</h2><p>Everyone who opted in. Permission-based — you can email these people legally.</p></div>
+  <div class="card flush">
+    <div class="table-wrap"><table><thead><tr><th>Email</th><th>Name</th><th>Source</th><th>Status</th><th></th></tr></thead><tbody id="leads-body"></tbody></table></div>
+    <div id="leads-empty" class="empty"><div class="big">No leads yet</div><div>Open the <b>Opt-in page</b> tab and submit an email to see one land here.</div></div>
+  </div>
+</section>
+
+<footer>Real app · this UI is served by the FastAPI backend and every action hits a live endpoint. AI drafting uses your configured OpenRouter model; discovery and email go live when their keys are set (until then: sample creators + dry-run email).</footer>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+(function(){
+  "use strict";
+  var $=function(s){return document.querySelector(s);};
+  var state=null;
+
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+  function comma(n){ return (n||0).toLocaleString("en-US"); }
+  function ago(ts){ if(!ts) return ""; var s=Math.floor((Date.now()-ts)/1000); if(s<5)return"just now"; if(s<60)return s+"s ago"; var m=Math.floor(s/60); if(m<60)return m+"m ago"; var h=Math.floor(m/60); if(h<24)return h+"h ago"; return Math.floor(h/24)+"d ago"; }
+
+  function toast(msg){ var el=document.createElement("div"); el.className="toast"; el.innerHTML='<span class="tick">✓</span><span>'+esc(msg)+'</span>'; $("#toasts").appendChild(el); setTimeout(function(){ el.style.transition="opacity .3s"; el.style.opacity="0"; setTimeout(function(){el.remove();},300); },2600); }
+
+  async function get(path){ var r=await fetch(path); if(!r.ok) throw new Error(r.status); return r.json(); }
+  async function post(path, body){ var r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:body?JSON.stringify(body):"null"}); if(!r.ok) throw new Error(r.status); return r.json(); }
+
+  function pill(el, ok, okText, warnText){ el.className="pill "+(ok?"ok":"warn"); el.textContent=ok?okText:warnText; }
+
+  function render(){
+    if(!state) return;
+    $("#t-creators").textContent=comma(state.stats.creators);
+    $("#t-leads").textContent=comma(state.stats.leads);
+    $("#t-emails").textContent=comma(state.stats.emails);
+    $("#t-campaigns").textContent=comma(state.stats.campaigns);
+
+    $("#s-offer").value=state.settings.offer||"";
+    $("#s-sender").value=state.settings.sender||"";
+    $("#s-magnet").value=state.settings.magnet||"";
+    var offer=state.settings.offer||"our free guide";
+    $("#landing-title").textContent="Get "+offer;
+    $("#o-offer").textContent=offer;
+
+    var ai=state.status.ai;
+    pill($("#st-ai"), ai.live, ai.provider+" · "+ai.model, ai.provider+" · add key");
+    pill($("#st-disc"), state.status.discovery, "live (Apify)", "sample data");
+    pill($("#st-email"), state.status.email, "SMTP live", "dry-run");
+    pill($("#st-sheets"), state.status.sheets, "syncing", "off");
+
+    var feed=$("#feed");
+    feed.innerHTML = state.activity.length ? state.activity.map(function(a){
+      return '<div class="row"><span class="dot '+(a.kind==="blue"?"blue":a.kind==="warn"?"warn":"")+'"></span><span class="txt">'+a.txt+'</span><span class="t">'+ago(a.ts)+'</span></div>';
+    }).join("") : '<div class="empty"><div class="big">Nothing yet</div><div>Discover creators or capture a lead to see the chain of events here.</div></div>';
+
+    var cc=$("#creators-card"), ac=$("#ads-card");
+    if(state.creators.length){
+      cc.hidden=false; ac.hidden=false;
+      $("#creators-count").textContent="· "+state.creators.length+" found";
+      $("#creators-body").innerHTML=state.creators.map(function(c){
+        return '<tr><td><div class="who">'+esc(c.name)+'</div><div class="hand">@'+esc(c.handle)+'</div>'+(c.message?('<div class="msg">'+esc(c.message)+'</div>'):'')+'</td><td>'+esc(c.platform)+'</td><td class="num-cell">'+comma(c.followers)+'</td><td><button class="btn '+(c.drafted?'sec':'')+' sm" data-action="draft" data-id="'+c.id+'">'+(c.drafted?'Redraft':'Draft outreach')+'</button></td></tr>';
+      }).join("");
+      $("#keywords").innerHTML=state.keywords.length?state.keywords.map(function(k){return '<span class="chip">'+esc(k)+'</span>';}).join(""):'<span class="note">—</span>';
+    } else { cc.hidden=true; ac.hidden=true; }
+
+    var subs=state.stats.leads;
+    var cl=$("#campaigns-list");
+    cl.innerHTML = state.campaigns.length ? state.campaigns.map(function(cp){
+      return '<div class="card"><div class="btn-row" style="justify-content:space-between;align-items:flex-start"><div><h3 style="margin:0 0 3px">'+esc(cp.name)+'</h3><div class="note">Subject: '+esc(cp.subject)+'</div></div>'+(cp.status==="sent"?'<span class="pill ok">sent · '+cp.recipients+'</span>':'<span class="pill warn">draft</span>')+'</div><div class="msg">'+esc(cp.body)+'</div>'+(cp.status!=="sent"?'<div class="btn-row" style="margin-top:12px"><button class="btn sm" data-action="send" data-id="'+cp.id+'">Send to '+subs+' opted-in lead'+(subs===1?'':'s')+'</button></div>':'')+'</div>';
+    }).join("") : '<div class="card"><div class="empty"><div class="big">No campaigns yet</div><div>Draft one above.</div></div></div>';
+
+    var lb=$("#leads-body"), le=$("#leads-empty");
+    if(state.leads.length){
+      le.hidden=true;
+      lb.innerHTML=state.leads.map(function(l){
+        return '<tr><td>'+esc(l.email)+'</td><td>'+esc(l.name||"—")+'</td><td>'+esc(l.source)+'</td><td>'+(l.status==="subscribed"?'<span class="pill ok">subscribed</span>':'<span class="pill warn">unsubscribed</span>')+'</td><td><button class="btn ghost sm" data-action="togglesub" data-id="'+l.id+'">'+(l.status==="subscribed"?"Unsubscribe":"Resubscribe")+'</button></td></tr>';
+      }).join("");
+    } else { lb.innerHTML=""; le.hidden=false; }
+  }
+
+  async function refresh(){ state=await get("/api/bootstrap"); render(); }
+
+  function switchView(name){
+    ["dashboard","discover","optin","campaigns","leads"].forEach(function(v){ $("#view-"+v).hidden=(v!==name); });
+    document.querySelectorAll(".tab").forEach(function(t){ t.classList.toggle("active", t.getAttribute("data-view")===name); });
+    window.scrollTo(0,0);
+  }
+  $("#tabs").addEventListener("click", function(e){ var b=e.target.closest(".tab"); if(b) switchView(b.getAttribute("data-view")); });
+
+  async function guard(fn){ try{ await fn(); }catch(e){ toast("Something went wrong — try again"); } }
+
+  $("#settings-form").addEventListener("submit", function(e){ e.preventDefault(); guard(async function(){
+    state=await post("/api/settings",{offer:$("#s-offer").value.trim(),sender:$("#s-sender").value.trim(),magnet:$("#s-magnet").value.trim()});
+    render(); toast("Offer saved");
+  }); });
+
+  $("#discover-form").addEventListener("submit", function(e){ e.preventDefault(); var niche=$("#d-niche").value.trim(); if(!niche) return;
+    var btn=$("#d-btn"); btn.disabled=true; btn.textContent="Discovering…";
+    guard(async function(){
+      state=await post("/api/discover",{niche:niche,location:$("#d-location").value.trim(),platform:$("#d-platform").value,limit:parseInt($("#d-limit").value,10)||12});
+      render(); var f=state.flash||{}; toast((f.count||0)+" creators found"+(f.source?(" ("+f.source+" data)"):""));
+    }).finally(function(){ btn.disabled=false; btn.textContent="Discover creators"; });
+  });
+
+  $("#optin-form").addEventListener("submit", function(e){ e.preventDefault();
+    if(!$("#o-consent").checked){ toast("Please tick the consent box"); return; }
+    guard(async function(){
+      state=await post("/api/subscribe",{email:$("#o-email").value.trim(),name:$("#o-name").value.trim(),consent:true});
+      render(); var f=state.flash||{}; toast(f.message||"Done"); if(f.ok){ $("#o-email").value=""; $("#o-name").value=""; $("#o-consent").checked=false; }
+    });
+  });
+
+  $("#campaign-form").addEventListener("submit", function(e){ e.preventDefault(); var name=$("#c-name").value.trim(); if(!name) return;
+    var btn=$("#c-btn"); btn.disabled=true; btn.textContent="Drafting…";
+    guard(async function(){
+      state=await post("/api/campaigns",{name:name,goal:$("#c-goal").value.trim()});
+      render(); $("#c-name").value=""; $("#c-goal").value=""; toast("Campaign drafted");
+    }).finally(function(){ btn.disabled=false; btn.textContent="Draft with AI"; });
+  });
+
+  document.addEventListener("click", function(e){
+    var el=e.target.closest("[data-action]"); if(!el) return;
+    var action=el.getAttribute("data-action"), cid=el.getAttribute("data-id");
+    if(action==="draft"){ el.disabled=true; el.textContent="Drafting…"; guard(async function(){ state=await post("/api/outreach/"+cid); render(); toast("Outreach drafted"); }); }
+    else if(action==="send"){ el.disabled=true; el.textContent="Sending…"; guard(async function(){ state=await post("/api/campaigns/"+cid+"/send"); render(); var f=state.flash||{}; toast("Sent to "+(f.sent||0)+"/"+(f.recipients||0)+(f.live?"":" (dry-run)")); }); }
+    else if(action==="togglesub"){ guard(async function(){ state=await post("/api/leads/"+cid+"/toggle"); render(); }); }
+  });
+
+  var root=document.documentElement, tbtn=$("#theme");
+  function sysDark(){ return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches; }
+  function isDark(){ var t=root.getAttribute("data-theme"); return t==="dark"||(!t&&sysDark()); }
+  function paintTheme(){ tbtn.textContent=isDark()?"☀":"☾"; }
+  try{ var th=localStorage.getItem("ls-theme"); if(th==="dark"||th==="light") root.setAttribute("data-theme",th); }catch(e){}
+  paintTheme();
+  tbtn.addEventListener("click", function(){ var next=isDark()?"light":"dark"; root.setAttribute("data-theme",next); try{ localStorage.setItem("ls-theme",next); }catch(e){} paintTheme(); });
+
+  guard(refresh);
+})();
+</script>
+</body>
+</html>

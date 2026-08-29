@@ -1,0 +1,41 @@
+# One-click deploy config for Render (https://render.com).
+# In Render: New +  →  Blueprint  →  connect this repo/branch. Render reads this
+# file, then prompts you for the values marked `sync: false` (your OpenRouter key
+# and model, and the app's public URL). Click Apply and you get a live https URL.
+#
+# The app runs on any host — this file just makes Render turnkey. The free plan's
+# disk is ephemeral, so captured leads reset on redeploy/restart; for durable
+# storage add a Render Disk (paid) or point DATABASE_URL at a Postgres instance.
+services:
+  - type: web
+    name: leadsystem
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      # --- AI: your open-source model via OpenRouter (no Anthropic) ---
+      - key: LLM_PROVIDER
+        value: openrouter
+      - key: LLM_BASE_URL
+        value: https://openrouter.ai/api/v1
+      - key: LLM_MODEL
+        sync: false          # e.g. meta-llama/llama-3.1-8b-instruct
+      - key: LLM_API_KEY
+        sync: false          # your OpenRouter key (sk-or-...)
+      # --- Public URL, used to build unsubscribe + tracking links ---
+      - key: APP_BASE_URL
+        sync: false          # e.g. https://leadsystem.onrender.com
+      # --- Optional: uncomment envVars below to go live on discovery/email ---
+      # - key: APIFY_TOKEN
+      #   sync: false
+      # - key: SMTP_HOST
+      #   sync: false
+      # - key: SMTP_USER
+      #   sync: false
+      # - key: SMTP_PASSWORD
+      #   sync: false
+      # - key: SMTP_FROM
+      #   sync: false

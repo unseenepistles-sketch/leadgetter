@@ -125,3 +125,34 @@ def test_health_endpoint():
     body = r.json()
     assert body["app"] == "ok"
     assert "ai" in body and "provider" in body["ai"]
+
+
+def test_console_page_serves():
+    r = client.get("/")
+    assert r.status_code == 200
+    assert "LeadSystem" in r.text and "/api/bootstrap" in r.text
+
+
+def test_api_bootstrap_shape():
+    d = client.get("/api/bootstrap").json()
+    for k in ("settings", "status", "stats", "creators", "leads", "campaigns", "keywords", "activity"):
+        assert k in d
+    assert "provider" in d["status"]["ai"]
+
+
+def test_api_discover_then_subscribe_fires_welcome():
+    d = client.post("/api/discover",
+                    json={"niche": "chess openings", "platform": "youtube", "limit": 5}).json()
+    assert d["stats"]["creators"] >= 5
+    assert d["flash"]["source"] == "sample"
+
+    before = client.get("/api/bootstrap").json()["stats"]["emails"]
+    d = client.post("/api/subscribe", json={"email": "api@example.com", "consent": True}).json()
+    assert d["flash"]["ok"] is True
+    after = client.get("/api/bootstrap").json()["stats"]["emails"]
+    assert after == before + 1  # welcome email logged
+
+
+def test_api_subscribe_requires_consent():
+    d = client.post("/api/subscribe", json={"email": "noconsent@example.com", "consent": False}).json()
+    assert d["flash"]["ok"] is False

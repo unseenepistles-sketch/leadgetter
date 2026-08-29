@@ -8,7 +8,6 @@ from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import state
@@ -16,6 +15,7 @@ from .ai import llm
 from .config import get_settings
 from .database import get_session, init_db
 from .models import Campaign, Creator
+from .routes_api import router as api_router
 from .services import ads, campaigns, creators, leads, outreach, sheets
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -31,6 +31,7 @@ app = FastAPI(title="LeadSystem", version="1.0.0", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 templates.env.filters["comma"] = lambda n: f"{int(n):,}" if n not in (None, "") else "0"
+app.include_router(api_router)
 
 
 def _client_ip(request: Request) -> str:
@@ -41,35 +42,9 @@ def _client_ip(request: Request) -> str:
 # ── Dashboard ─────────────────────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
-def dashboard(request: Request, db: Session = Depends(get_session)):
-    settings = get_settings()
-    st = state.load()
-    creator_rows = list(db.execute(
-        select(Creator).order_by(Creator.followers.desc()).limit(50)
-    ).scalars())
-    campaign_rows = list(db.execute(
-        select(Campaign).where(Campaign.status != "auto")
-        .order_by(Campaign.created_at.desc()).limit(10)
-    ).scalars())
-    ctx = {
-        "request": request,
-        "state": st,
-        "creators": creator_rows,
-        "campaigns_list": campaign_rows,
-        "lead_counts": leads.counts(db),
-        "campaign_stats": campaigns.stats(db),
-        "keywords": ads.interest_keywords(db, st.get("niche") or None),
-        "status": {
-            "ai": {"live": settings.ai_configured, "provider": settings.llm_provider,
-                   "model": settings.llm_model},
-            "discovery": settings.discovery_live,
-            "email": settings.email_live,
-            "sheets": settings.sheets_enabled,
-        },
-        "platforms": creators.PLATFORMS,
-        "flash": request.query_params.get("msg", ""),
-    }
-    return templates.TemplateResponse(request, "dashboard.html", ctx)
+def console(request: Request):
+    """The single-page operator console. It loads its data from /api/bootstrap."""
+    return templates.TemplateResponse(request, "console.html", {})
 
 
 @app.post("/settings")

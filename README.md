@@ -65,6 +65,27 @@ Run the tests:
 pytest -q
 ```
 
+The operator UI is a single-page **console** served at `/` (see `app/templates/
+console.html`), backed by the JSON API in `app/routes_api.py`. The public opt-in
+page your audience visits is at `/landing`.
+
+---
+
+## Deploy (get a live link)
+
+The app runs on any host. `render.yaml` makes [Render](https://render.com)
+turnkey:
+
+1. In Render: **New + → Blueprint** → connect this repo/branch.
+2. Render reads `render.yaml` and prompts for the `sync: false` values — your
+   **`LLM_MODEL`**, **`LLM_API_KEY`** (OpenRouter), and **`APP_BASE_URL`** (the
+   URL Render assigns, e.g. `https://leadsystem.onrender.com`).
+3. **Apply** → you get a live HTTPS URL running the console.
+
+Start command (any host): `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
+Note: the free tier's disk is ephemeral (leads reset on redeploy) — add a
+persistent disk or point `DATABASE_URL` at Postgres for durable storage.
+
 ---
 
 ## The AI layer (open-source, no Anthropic)
