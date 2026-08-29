@@ -114,7 +114,7 @@ Everything is optional; see `.env.example` for the full list.
 | Area       | Keys                                            | Without it |
 |------------|-------------------------------------------------|------------|
 | AI         | `LLM_PROVIDER`, `LLM_MODEL`, `LLM_BASE_URL`, `LLM_API_KEY` | Template drafts |
-| Discovery  | `APIFY_TOKEN`, `APIFY_CREATOR_ACTOR`            | Sample creators |
+| Discovery  | `YOUTUBE_API_KEY` (free), `DISCOVERY_PROVIDER`, `APIFY_TOKEN` (IG/TikTok) | Sample creators |
 | Sheets     | `SHEETS_ENABLED`, `SHEETS_SPREADSHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_JSON` | DB only |
 | Email      | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | Dry-run |
 

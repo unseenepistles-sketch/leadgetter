@@ -27,6 +27,10 @@ class Settings:
     llm_api_key: str = os.getenv("LLM_API_KEY", "")
 
     # Creator discovery
+    # provider: auto | youtube | apify   (auto = free YouTube API when a key is
+    # set and the platform is youtube, else Apify, else sample data)
+    discovery_provider: str = os.getenv("DISCOVERY_PROVIDER", "auto")
+    youtube_api_key: str = os.getenv("YOUTUBE_API_KEY", "")  # free, no billing
     apify_token: str = os.getenv("APIFY_TOKEN", "")
     apify_creator_actor: str = os.getenv("APIFY_CREATOR_ACTOR", "apify/instagram-search-scraper")
 
@@ -57,7 +61,7 @@ class Settings:
 
     @property
     def discovery_live(self) -> bool:
-        return bool(self.apify_token)
+        return bool(self.youtube_api_key or self.apify_token)
 
     @property
     def email_live(self) -> bool:

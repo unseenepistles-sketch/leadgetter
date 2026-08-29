@@ -156,3 +156,32 @@ def test_api_discover_then_subscribe_fires_welcome():
 def test_api_subscribe_requires_consent():
     d = client.post("/api/subscribe", json={"email": "noconsent@example.com", "consent": False}).json()
     assert d["flash"]["ok"] is False
+
+
+def test_youtube_mapper_ranks_and_maps():
+    ids = ["A", "B", "C"]
+    search_items = [
+        {"id": {"channelId": "A"}, "snippet": {"channelId": "A", "title": "Alpha"}},
+        {"id": {"channelId": "B"}, "snippet": {"channelId": "B", "title": "Beta"}},
+        {"id": {"channelId": "C"}, "snippet": {"channelId": "C", "title": "Gamma"}},
+    ]
+    stats = {
+        "A": {"id": "A", "snippet": {"title": "Alpha", "customUrl": "@alpha", "description": "chess"},
+              "statistics": {"subscriberCount": "1000"}},
+        "B": {"id": "B", "snippet": {"title": "Beta", "description": "chess tactics"},
+              "statistics": {"subscriberCount": "50000"}},
+        "C": {"id": "C", "snippet": {"title": "Gamma"},
+              "statistics": {"hiddenSubscriberCount": True}},
+    }
+    out = creators._map_youtube(ids, search_items, stats, "")
+    assert [c["followers"] for c in out] == [50000, 1000, 0]  # ranked by subs desc
+    assert out[0]["platform"] == "youtube"
+    alpha = [c for c in out if c["name"] == "Alpha"][0]
+    assert alpha["handle"] == "alpha"                    # @ stripped from customUrl
+    assert alpha["url"].startswith("https://www.youtube.com/channel/")
+    assert all(c["public_email"] == "" for c in out)     # API never exposes emails
+
+
+def test_discovery_falls_back_to_sample_without_keys():
+    found, source = creators.discover("chess openings", "", "youtube", 5)
+    assert source == "sample"  # no YOUTUBE_API_KEY / APIFY_TOKEN in tests

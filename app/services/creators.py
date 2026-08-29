@@ -37,14 +37,26 @@ PLATFORMS = ("instagram", "youtube", "tiktok")
 
 def discover(niche: str, location: str = "", platform: str = "instagram",
              limit: int = 25) -> tuple[list[dict], str]:
-    """Return (creators, source) where source is 'apify' or 'sample'."""
+    """Return (creators, source): 'youtube' | 'apify' | 'sample'."""
     settings = get_settings()
     niche = (niche or "").strip()
     platform = (platform or "instagram").strip().lower()
     if platform not in PLATFORMS:
         platform = "instagram"
+    provider = (settings.discovery_provider or "auto").lower()
 
-    if settings.discovery_live:
+    # Free YouTube Data API — official, no billing; only for the youtube platform.
+    if platform == "youtube" and settings.youtube_api_key and provider in ("auto", "youtube"):
+        try:
+            creators = _discover_youtube(niche, location, limit)
+            if creators:
+                return creators, "youtube"
+            log.info("YouTube API returned no channels; trying next source.")
+        except Exception as exc:  # noqa: BLE001
+            log.warning("YouTube discovery failed: %s", exc)
+
+    # Apify (Instagram / TikTok / YouTube) when a token is set.
+    if settings.apify_token and provider in ("auto", "apify"):
         try:
             creators = _discover_apify(niche, location, platform, limit)
             if creators:
@@ -136,6 +148,70 @@ def _discover_apify(niche: str, location: str, platform: str, limit: int) -> lis
         })
     creators.sort(key=lambda c: c["followers"], reverse=True)
     return creators
+
+
+# ── YouTube Data API v3 (free, official, no billing) ──────────────────────
+
+def _discover_youtube(niche: str, location: str, limit: int) -> list[dict]:
+    """Find YouTube channels for a niche via the free YouTube Data API.
+
+    Two calls: search.list (channels for the query — 100 quota units) then
+    channels.list (subscriber counts + descriptions — 1 unit). The API does not
+    expose a channel's contact email, so public_email stays empty here.
+    """
+    settings = get_settings()
+    key = settings.youtube_api_key
+    query = f"{niche} {location}".strip()
+    n = max(1, min(limit, 25))
+    with httpx.Client(timeout=30.0) as client:
+        sr = client.get("https://www.googleapis.com/youtube/v3/search", params={
+            "part": "snippet", "type": "channel", "q": query, "maxResults": n, "key": key,
+        })
+        sr.raise_for_status()
+        search_items = sr.json().get("items", [])
+        ids: list[str] = []
+        for it in search_items:
+            cid = (it.get("id") or {}).get("channelId") or (it.get("snippet") or {}).get("channelId")
+            if cid:
+                ids.append(cid)
+        stats: dict[str, dict] = {}
+        if ids:
+            cr = client.get("https://www.googleapis.com/youtube/v3/channels", params={
+                "part": "snippet,statistics", "id": ",".join(ids), "key": key,
+            })
+            cr.raise_for_status()
+            for it in cr.json().get("items", []):
+                stats[it["id"]] = it
+    return _map_youtube(ids, search_items, stats, location)
+
+
+def _map_youtube(ids: list[str], search_items: list[dict], stats: dict[str, dict],
+                 location: str) -> list[dict]:
+    """Map YouTube API payloads to creator dicts, ranked by subscriber count."""
+    snip_by_id: dict[str, dict] = {}
+    for it in search_items:
+        cid = (it.get("id") or {}).get("channelId") or (it.get("snippet") or {}).get("channelId")
+        if cid:
+            snip_by_id[cid] = it.get("snippet") or {}
+    out: list[dict] = []
+    for cid in ids:
+        ch = stats.get(cid) or {}
+        snip = ch.get("snippet") or snip_by_id.get(cid, {})
+        st = ch.get("statistics") or {}
+        subs = 0 if st.get("hiddenSubscriberCount") else int(st.get("subscriberCount") or 0)
+        handle = (snip.get("customUrl") or snip.get("title") or cid).lstrip("@")
+        out.append({
+            "platform": "youtube",
+            "handle": handle,
+            "name": snip.get("title") or handle,
+            "url": f"https://www.youtube.com/channel/{cid}",
+            "followers": subs,
+            "location": location,
+            "bio": (snip.get("description") or "")[:500],
+            "public_email": "",  # not exposed by the YouTube Data API
+        })
+    out.sort(key=lambda c: c["followers"], reverse=True)
+    return out
 
 
 # ── Sample data (offline / no token) ──────────────────────────────────────

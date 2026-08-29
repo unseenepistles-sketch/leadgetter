@@ -28,7 +28,12 @@ services:
       # --- Public URL, used to build unsubscribe + tracking links ---
       - key: APP_BASE_URL
         sync: false          # e.g. https://leadsystem.onrender.com
-      # --- Optional: uncomment envVars below to go live on discovery/email ---
+      # --- Discovery: free YouTube Data API (recommended, no billing) ---
+      - key: DISCOVERY_PROVIDER
+        value: auto
+      - key: YOUTUBE_API_KEY
+        sync: false          # free Google API key — used for platform=youtube
+      # --- Optional paid: Apify (Instagram/TikTok), SMTP (real email) ---
       # - key: APIFY_TOKEN
       #   sync: false
       # - key: SMTP_HOST
