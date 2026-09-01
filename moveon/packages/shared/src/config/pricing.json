@@ -1,0 +1,77 @@
+{
+  "currency": "KES",
+  "roundTotalToNearest": 10,
+  "quoteTtlSeconds": 900,
+  "estimation": {
+    "nominalDensityKgPerM3": 150,
+    "fillLevelFractions": {
+      "quarter": 0.25,
+      "half": 0.5,
+      "three_quarter": 0.75,
+      "full": 1.0,
+      "overflowing": 1.25
+    },
+    "photoMinConfidence": 0.55,
+    "handlingUnitsPerM3": 8
+  },
+  "loadFactor": {
+    "bands": [
+      {
+        "upToFraction": 0.5,
+        "multiplier": 1.0
+      },
+      {
+        "upToFraction": 0.85,
+        "multiplier": 1.08
+      },
+      {
+        "upToFraction": 1.0,
+        "multiplier": 1.15
+      }
+    ],
+    "densityCriticalMultiplier": 1.2,
+    "densityCriticalThreshold": 0.85,
+    "poolableUpToFraction": 0.5
+  },
+  "surcharges": {
+    "night": {
+      "startHour": 22,
+      "endHour": 5,
+      "rate": 0.15
+    },
+    "demandMultiplierCap": 1.8,
+    "returnLegRate": 0.65,
+    "additionalStopFee": 300,
+    "fragileHandlingFee": 250,
+    "enclosedVehicleFee": 400
+  },
+  "helpers": {
+    "baseFeePerHelper": 300,
+    "feePerFloorPerHelper": 150,
+    "maxHelpers": 2
+  },
+  "discounts": {
+    "backhaulRate": 0.25,
+    "scheduledRate": 0.07,
+    "businessTierRates": {
+      "none": 0,
+      "bronze": 0.03,
+      "silver": 0.06,
+      "gold": 0.1
+    },
+    "maxTotalRate": 0.35
+  },
+  "handling": {
+    "waivedOverrunsPerMonth": 2,
+    "graceMinutes": 3
+  },
+  "tolerance": {
+    "bandFraction": 0.2,
+    "customerUnderDeclarationThreshold": 0.25,
+    "driverOverReportThreshold": 0.2,
+    "minObservationsForScore": 5
+  },
+  "cover": {
+    "includedValueCap": 50000
+  }
+}

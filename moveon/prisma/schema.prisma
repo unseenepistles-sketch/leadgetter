@@ -1,0 +1,412 @@
+// move.on — persistent store.
+//
+// Two rules shape this schema:
+//   1. Everything the pricing engine reads is a ROW, not a constant, so ops can
+//      change a rate without a deploy (§3).
+//   2. Money is never recomputed from trip rows on the fly. Every movement is a
+//      double-entry ledger line (§9), and driver earnings are read from there.
+//
+// Postgres with PostGIS. Live driver positions live in Redis; PostGIS holds the
+// persistent geo queries (service areas, backhaul corridors, trip endpoints).
+
+generator client {
+  provider        = "prisma-client-js"
+  // PostGIS is declared as a datasource extension, and geography columns are
+  // typed Unsupported() — Prisma does not model them, but it will manage them.
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+// ------------------------------------------------------------------
+// Configuration — ops-editable, read by the pricing engine
+// ------------------------------------------------------------------
+
+model VehicleClass {
+  code                String   @id
+  displayName         String
+  volumeM3            Decimal  @db.Decimal(10, 3)
+  payloadKg           Int
+  bedLengthM          Decimal  @db.Decimal(6, 2)
+  enclosed            Boolean  @default(false)
+  passengerCapacity   Int      @default(1)
+  /// Curbside handling included free, in minutes (§5).
+  freeHandlingMinutes Int
+  typicalJob          String
+  /// §12 — launch with two adjacent classes; ops opens the rest as supply grows.
+  enabled             Boolean  @default(false)
+  updatedAt           DateTime @updatedAt
+
+  pricing  ClassPricing?
+  vehicles Vehicle[]
+  quotes   Quote[]
+
+  @@map("vehicle_classes")
+}
+
+model ClassPricing {
+  vehicleClass      String   @id
+  baseFare          Decimal  @db.Decimal(12, 2)
+  minimumFare       Decimal  @db.Decimal(12, 2)
+  /// Tapered bands, marginal like tax brackets: [{uptoKm, ratePerKm, label}].
+  distanceBands     Json
+  timeRatePerMin    Decimal  @db.Decimal(12, 2)
+  waitingRatePerMin Decimal  @db.Decimal(12, 2)
+  deadRunFee        Decimal  @db.Decimal(12, 2)
+  updatedAt         DateTime @updatedAt
+
+  vehicleClassRef VehicleClass @relation(fields: [vehicleClass], references: [code], onDelete: Cascade)
+
+  @@map("class_pricing")
+}
+
+/// Global pricing knobs, versioned so a quote can always be re-explained later.
+model PricingConfig {
+  id        Int      @id @default(autoincrement())
+  version   Int      @unique
+  payload   Json
+  active    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  createdBy String?
+
+  @@map("pricing_config")
+}
+
+// ------------------------------------------------------------------
+// Catalog — what people actually move
+// ------------------------------------------------------------------
+
+model CatalogItem {
+  id               String   @id
+  name             String
+  category         String
+  volumeM3         Decimal  @db.Decimal(10, 3)
+  weightKg         Decimal  @db.Decimal(10, 2)
+  fragile          Boolean  @default(false)
+  requiresEnclosed Boolean  @default(false)
+  handlingUnits    Int      @default(1)
+  /// Cement, blocks, tiles: hits the payload ceiling before it fills the bed.
+  densityCritical  Boolean  @default(false)
+  /// Iron sheets, timber, pipes: needs bed length, not volume.
+  lengthCritical   Boolean  @default(false)
+  minBedLengthM    Decimal? @db.Decimal(6, 2)
+  /// Local search synonyms — "mitumba", "mabati", "debe".
+  aliases          String[]
+  updatedAt        DateTime @updatedAt
+
+  bundleLines CatalogBundleItem[]
+
+  @@index([category])
+  @@map("catalog_items")
+}
+
+model CatalogBundle {
+  id          String              @id
+  name        String
+  description String
+  items       CatalogBundleItem[]
+
+  @@map("catalog_bundles")
+}
+
+model CatalogBundleItem {
+  id       Int    @id @default(autoincrement())
+  bundleId String
+  itemId   String
+  quantity Int
+
+  bundle CatalogBundle @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  item   CatalogItem   @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@unique([bundleId, itemId])
+  @@map("catalog_bundle_items")
+}
+
+// ------------------------------------------------------------------
+// People and vehicles
+// ------------------------------------------------------------------
+
+/// Auth is phone + OTP. Nobody in this market types a password (§10).
+model Customer {
+  id        String   @id @default(uuid())
+  phone     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+
+  /// Anti-gaming (§4). Past this rate the tolerance band is withdrawn.
+  underDeclarationRate    Decimal @default(0) @db.Decimal(5, 4)
+  confirmedTrips          Int     @default(0)
+  /// Goodwill budget: waiting overruns already forgiven this month (§5).
+  waivedOverrunsThisMonth Int     @default(0)
+
+  businessAccountId String?
+  businessAccount   BusinessAccount? @relation(fields: [businessAccountId], references: [id])
+
+  quotes Quote[]
+  trips  Trip[]
+
+  @@map("customers")
+}
+
+model BusinessAccount {
+  id        String     @id @default(uuid())
+  name      String
+  tier      String     @default("bronze")
+  createdAt DateTime   @default(now())
+  members   Customer[]
+
+  @@map("business_accounts")
+}
+
+model Driver {
+  id        String   @id @default(uuid())
+  phone     String   @unique
+  name      String
+  createdAt DateTime @default(now())
+
+  /// Nothing goes live unverified (§8).
+  verificationStatus String    @default("pending")
+  verifiedAt         DateTime?
+
+  /// Anti-gaming, the other side of the same rule (§4).
+  overReportRate Decimal @default(0) @db.Decimal(5, 4)
+  confirmedTrips Int     @default(0)
+  rating         Decimal @default(0) @db.Decimal(3, 2)
+  acceptanceRate Decimal @default(0) @db.Decimal(5, 4)
+
+  vehicles  Vehicle[]
+  documents DriverDocument[]
+  trips     Trip[]
+  wallet    DriverWallet?
+
+  @@map("drivers")
+}
+
+/// Onboarding gates (§8). Every one of these must be present and valid.
+model DriverDocument {
+  id         String    @id @default(uuid())
+  driverId   String
+  /// national_id | licence | logbook | insurance | tax_pin | police_clearance | selfie_liveness
+  kind       String
+  fileUrl    String
+  expiresAt  DateTime?
+  verifiedAt DateTime?
+  verifiedBy String?
+
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@unique([driverId, kind])
+  @@map("driver_documents")
+}
+
+model Vehicle {
+  id               String   @id @default(uuid())
+  driverId         String
+  vehicleClassCode String
+  registration     String   @unique
+  createdAt        DateTime @default(now())
+
+  driver       Driver       @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  vehicleClass VehicleClass @relation(fields: [vehicleClassCode], references: [code])
+  trips        Trip[]
+
+  @@map("vehicles")
+}
+
+// ------------------------------------------------------------------
+// Quotes and trips
+// ------------------------------------------------------------------
+
+model Quote {
+  id               String   @id @default(uuid())
+  customerId       String?
+  vehicleClassCode String
+  createdAt        DateTime @default(now())
+  expiresAt        DateTime
+
+  /// The request exactly as priced, so any quote can be re-explained later.
+  request  Json
+  /// The full quote object, breakdown included. The receipt is not recomputed.
+  response Json
+  total    Decimal @db.Decimal(12, 2)
+  currency String  @default("KES")
+
+  declaredVolumeM3 Decimal @db.Decimal(10, 3)
+  declaredWeightKg Decimal @db.Decimal(10, 2)
+  /// catalog | fill_level | photo
+  estimationMethod String
+
+  customer     Customer?    @relation(fields: [customerId], references: [id])
+  vehicleClass VehicleClass @relation(fields: [vehicleClassCode], references: [code])
+  trip         Trip?
+  photos       LoadPhoto[]
+
+  @@index([customerId, createdAt])
+  @@map("quotes")
+}
+
+model Trip {
+  id         String  @id @default(uuid())
+  quoteId    String  @unique
+  customerId String
+  driverId   String?
+  vehicleId  String?
+
+  /// requested | dispatched | accepted | at_pickup | loaded | in_transit | delivered | cancelled
+  status String @default("requested")
+
+  pickupAddress  String
+  dropoffAddress String
+  pickupPoint    Unsupported("geography(Point, 4326)")?
+  dropoffPoint   Unsupported("geography(Point, 4326)")?
+  /// Stops beyond pickup and final dropoff, in order.
+  waypoints      Json?
+
+  requestedAt DateTime  @default(now())
+  acceptedAt  DateTime?
+  arrivedAt   DateTime?
+  loadedAt    DateTime?
+  completedAt DateTime?
+  cancelledAt DateTime?
+
+  /// The price actually charged. Equals the quote total in >= 95% of trips (§13.2).
+  chargedTotal Decimal? @db.Decimal(12, 2)
+  /// Set only when a re-quote was approved in-app.
+  requoteOfId  String?
+
+  quote            Quote             @relation(fields: [quoteId], references: [id])
+  customer         Customer          @relation(fields: [customerId], references: [id])
+  driver           Driver?           @relation(fields: [driverId], references: [id])
+  vehicle          Vehicle?          @relation(fields: [vehicleId], references: [id])
+  loadConfirmation LoadConfirmation?
+  proofs           TripProof[]
+  ledgerEntries    LedgerEntry[]
+  payments         Payment[]
+
+  @@index([status, requestedAt])
+  @@index([driverId, requestedAt])
+  @@map("trips")
+}
+
+/// Layer 4 (§4). Recorded on every trip, whatever the outcome — the absorbed
+/// ones are exactly the data that tells you whether the tolerance band is right.
+model LoadConfirmation {
+  id     String @id @default(uuid())
+  tripId String @unique
+
+  /// matches | absorbed | requote_required
+  outcome             String
+  declaredVolumeM3    Decimal  @db.Decimal(10, 3)
+  actualVolumeM3      Decimal  @db.Decimal(10, 3)
+  actualWeightKg      Decimal  @db.Decimal(10, 2)
+  overrunFraction     Decimal  @db.Decimal(6, 4)
+  underDeclared       Boolean
+  requiresOpsApproval Boolean  @default(false)
+  confirmedAt         DateTime @default(now())
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@map("load_confirmations")
+}
+
+/// Proof of pickup and delivery (§8): timestamped, geotagged, OTP-backed.
+model TripProof {
+  id               String                                 @id @default(uuid())
+  tripId           String
+  /// pickup | delivery
+  kind             String
+  photoUrl         String?
+  signatureUrl     String?
+  otpVerified      Boolean                                @default(false)
+  recordedAt       DateTime                               @default(now())
+  recordedAt_point Unsupported("geography(Point, 4326)")?
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId, kind])
+  @@map("trip_proofs")
+}
+
+/// Every photo estimate paired with the load the driver confirmed. This is the
+/// training set, and nobody else has it (§4 layer 3).
+model LoadPhoto {
+  id                String   @id @default(uuid())
+  quoteId           String
+  url               String
+  estimatedVolumeM3 Decimal? @db.Decimal(10, 3)
+  confidence        Decimal? @db.Decimal(4, 3)
+  confirmedVolumeM3 Decimal? @db.Decimal(10, 3)
+  createdAt         DateTime @default(now())
+
+  quote Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@map("load_photos")
+}
+
+// ------------------------------------------------------------------
+// Money (§9)
+// ------------------------------------------------------------------
+
+model Payment {
+  id     String @id @default(uuid())
+  tripId String
+
+  /// mpesa | card | cash
+  method String
+  /// sender | receiver — receiver-pays matters enormously for traders (§9).
+  payer  String
+  /// pending | confirmed | failed | timed_out
+  status String @default("pending")
+
+  amount   Decimal @db.Decimal(12, 2)
+  currency String  @default("KES")
+
+  /// M-Pesa STK push is asynchronous and times out often on poor networks.
+  providerRef String?
+  callbackAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  trip Trip @relation(fields: [tripId], references: [id])
+
+  @@index([status, createdAt])
+  @@map("payments")
+}
+
+/// Cash creates a driver-owes-platform balance. Below the floor, the driver
+/// cannot go online until they settle (§9).
+model DriverWallet {
+  driverId             String   @id
+  balance              Decimal  @default(0) @db.Decimal(12, 2)
+  negativeBalanceFloor Decimal  @default(-2000) @db.Decimal(12, 2)
+  updatedAt            DateTime @updatedAt
+
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@map("driver_wallets")
+}
+
+/// Immutable double-entry. Driver earnings are READ from here, never computed
+/// on the fly from trip rows (§9).
+model LedgerEntry {
+  id        String   @id @default(uuid())
+  tripId    String?
+  /// customer_charge | driver_earning | platform_commission | helper_fee |
+  /// dead_run_fee | waiting_fee | cash_collected | payout
+  kind      String
+  /// Account identifier: "driver:<id>", "customer:<id>", "platform", "helper:<id>".
+  account   String
+  debit     Decimal  @default(0) @db.Decimal(12, 2)
+  credit    Decimal  @default(0) @db.Decimal(12, 2)
+  currency  String   @default("KES")
+  createdAt DateTime @default(now())
+
+  trip Trip? @relation(fields: [tripId], references: [id])
+
+  @@index([account, createdAt])
+  @@index([tripId])
+  @@map("ledger_entries")
+}

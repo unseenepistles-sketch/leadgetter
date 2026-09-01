@@ -1,0 +1,120 @@
+[
+  {
+    "id": "house_move_1br",
+    "name": "1-bedroom house move",
+    "description": "Bed, mattress, sofa, cooker, fridge, wardrobe and the boxes around them.",
+    "items": [
+      { "itemId": "bed_frame_headboard", "quantity": 1 },
+      { "itemId": "mattress_double", "quantity": 1 },
+      { "itemId": "wardrobe_2door", "quantity": 1 },
+      { "itemId": "sofa_3seater", "quantity": 1 },
+      { "itemId": "coffee_table", "quantity": 1 },
+      { "itemId": "fridge_single_door", "quantity": 1 },
+      { "itemId": "cooker_4burner", "quantity": 1 },
+      { "itemId": "tv_boxed", "quantity": 1 },
+      { "itemId": "carton_medium", "quantity": 8 },
+      { "itemId": "gas_cylinder_13kg", "quantity": 1 },
+      { "itemId": "suitcase_large", "quantity": 2 }
+    ]
+  },
+  {
+    "id": "house_move_2br",
+    "name": "2-bedroom house move",
+    "description": "Full sitting room, two beds, appliances and packing boxes.",
+    "items": [
+      { "itemId": "bed_frame_headboard", "quantity": 2 },
+      { "itemId": "mattress_double", "quantity": 1 },
+      { "itemId": "mattress_single", "quantity": 1 },
+      { "itemId": "wardrobe_2door", "quantity": 2 },
+      { "itemId": "sofa_5seater", "quantity": 1 },
+      { "itemId": "coffee_table", "quantity": 1 },
+      { "itemId": "dining_set_6", "quantity": 1 },
+      { "itemId": "fridge_double_door", "quantity": 1 },
+      { "itemId": "cooker_4burner", "quantity": 1 },
+      { "itemId": "washing_machine", "quantity": 1 },
+      { "itemId": "tv_boxed", "quantity": 1 },
+      { "itemId": "carton_medium", "quantity": 15 },
+      { "itemId": "gas_cylinder_13kg", "quantity": 1 },
+      { "itemId": "suitcase_large", "quantity": 3 }
+    ]
+  },
+  {
+    "id": "bedsitter_move",
+    "name": "Bedsitter / single-room move",
+    "description": "One room's worth: mattress, a few boxes, cooker, gas.",
+    "items": [
+      { "itemId": "mattress_double", "quantity": 1 },
+      { "itemId": "carton_medium", "quantity": 6 },
+      { "itemId": "cooker_4burner", "quantity": 1 },
+      { "itemId": "gas_cylinder_13kg", "quantity": 1 },
+      { "itemId": "tv_boxed", "quantity": 1 },
+      { "itemId": "suitcase_large", "quantity": 2 },
+      { "itemId": "coffee_table", "quantity": 1 }
+    ]
+  },
+  {
+    "id": "salon_relocation",
+    "name": "Salon relocation",
+    "description": "Dryers, basins, mirrors and stock for a small salon.",
+    "items": [
+      { "itemId": "salon_dryer_chair", "quantity": 3 },
+      { "itemId": "salon_wash_basin", "quantity": 2 },
+      { "itemId": "office_chair", "quantity": 3 },
+      { "itemId": "market_stall_table", "quantity": 2 },
+      { "itemId": "carton_medium", "quantity": 6 },
+      { "itemId": "water_drum_200l", "quantity": 1 }
+    ]
+  },
+  {
+    "id": "market_stall_restock",
+    "name": "Market stall restock",
+    "description": "A trader's weekly run: sacks, crates, a bale.",
+    "items": [
+      { "itemId": "sack_50kg_grain", "quantity": 10 },
+      { "itemId": "sack_potatoes", "quantity": 4 },
+      { "itemId": "crate_sodas", "quantity": 6 },
+      { "itemId": "bale_mitumba", "quantity": 2 }
+    ]
+  },
+  {
+    "id": "duka_restock",
+    "name": "Duka / shop restock",
+    "description": "Small retail shop replenishment.",
+    "items": [
+      { "itemId": "crate_sodas", "quantity": 12 },
+      { "itemId": "sack_50kg_grain", "quantity": 6 },
+      { "itemId": "carton_medium", "quantity": 10 }
+    ]
+  },
+  {
+    "id": "small_build_site",
+    "name": "Small build — foundation load",
+    "description": "Cement, blocks and ballast. Hits the payload ceiling long before the bed fills.",
+    "items": [
+      { "itemId": "sack_50kg_cement", "quantity": 20 },
+      { "itemId": "building_blocks_50", "quantity": 2 },
+      { "itemId": "ballast_tonne", "quantity": 1 }
+    ]
+  },
+  {
+    "id": "roofing_run",
+    "name": "Roofing run",
+    "description": "Iron sheets and timber. Needs bed length, not volume.",
+    "items": [
+      { "itemId": "iron_sheets_10", "quantity": 4 },
+      { "itemId": "timber_lengths_10", "quantity": 2 }
+    ]
+  },
+  {
+    "id": "office_move_small",
+    "name": "Small office move",
+    "description": "Four desks, chairs, cabinets and IT boxes.",
+    "items": [
+      { "itemId": "office_desk", "quantity": 4 },
+      { "itemId": "office_chair", "quantity": 6 },
+      { "itemId": "filing_cabinet", "quantity": 2 },
+      { "itemId": "carton_medium", "quantity": 12 },
+      { "itemId": "tv_boxed", "quantity": 1 }
+    ]
+  }
+]

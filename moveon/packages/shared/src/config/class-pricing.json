@@ -1,0 +1,65 @@
+[
+  { "vehicleClass": "boda", "baseFare": 120, "minimumFare": 150, "timeRatePerMin": 3, "waitingRatePerMin": 4, "deadRunFee": 120,
+    "distanceBands": [
+      { "uptoKm": 5,  "ratePerKm": 40, "label": "0-5 km" },
+      { "uptoKm": 20, "ratePerKm": 28, "label": "5-20 km" },
+      { "uptoKm": 80, "ratePerKm": 22, "label": "20-80 km" },
+      { "uptoKm": null, "ratePerKm": 18, "label": "Intercity" }
+    ]},
+  { "vehicleClass": "car_boot", "baseFare": 250, "minimumFare": 350, "timeRatePerMin": 6, "waitingRatePerMin": 8, "deadRunFee": 250,
+    "distanceBands": [
+      { "uptoKm": 5,  "ratePerKm": 70, "label": "0-5 km" },
+      { "uptoKm": 20, "ratePerKm": 42, "label": "5-20 km" },
+      { "uptoKm": 80, "ratePerKm": 32, "label": "20-80 km" },
+      { "uptoKm": null, "ratePerKm": 25, "label": "Intercity" }
+    ]},
+  { "vehicleClass": "tuktuk", "baseFare": 200, "minimumFare": 300, "timeRatePerMin": 5, "waitingRatePerMin": 7, "deadRunFee": 200,
+    "distanceBands": [
+      { "uptoKm": 5,  "ratePerKm": 60, "label": "0-5 km" },
+      { "uptoKm": 20, "ratePerKm": 38, "label": "5-20 km" },
+      { "uptoKm": 80, "ratePerKm": 30, "label": "20-80 km" },
+      { "uptoKm": null, "ratePerKm": 24, "label": "Intercity" }
+    ]},
+  { "vehicleClass": "pickup_double", "baseFare": 420, "minimumFare": 580, "timeRatePerMin": 10, "waitingRatePerMin": 13, "deadRunFee": 450,
+    "distanceBands": [
+      { "uptoKm": 5,  "ratePerKm": 90, "label": "0-5 km" },
+      { "uptoKm": 20, "ratePerKm": 50, "label": "5-20 km" },
+      { "uptoKm": 80, "ratePerKm": 38, "label": "20-80 km" },
+      { "uptoKm": null, "ratePerKm": 29, "label": "Intercity" }
+    ]},
+  { "vehicleClass": "pickup_single", "baseFare": 450, "minimumFare": 600, "timeRatePerMin": 11, "waitingRatePerMin": 14, "deadRunFee": 500,
+    "distanceBands": [
+      { "uptoKm": 5,  "ratePerKm": 95, "label": "0-5 km" },
+      { "uptoKm": 20, "ratePerKm": 52, "label": "5-20 km" },
+      { "uptoKm": 80, "ratePerKm": 40, "label": "20-80 km" },
+      { "uptoKm": null, "ratePerKm": 31, "label": "Intercity" }
+    ]},
+  { "vehicleClass": "panel_van", "baseFare": 600, "minimumFare": 900, "timeRatePerMin": 15, "waitingRatePerMin": 18, "deadRunFee": 800,
+    "distanceBands": [
+      { "uptoKm": 5,  "ratePerKm": 120, "label": "0-5 km" },
+      { "uptoKm": 20, "ratePerKm": 68, "label": "5-20 km" },
+      { "uptoKm": 80, "ratePerKm": 52, "label": "20-80 km" },
+      { "uptoKm": null, "ratePerKm": 40, "label": "Intercity" }
+    ]},
+  { "vehicleClass": "canter_3t", "baseFare": 800, "minimumFare": 1500, "timeRatePerMin": 20, "waitingRatePerMin": 25, "deadRunFee": 1200,
+    "distanceBands": [
+      { "uptoKm": 5,  "ratePerKm": 160, "label": "0-5 km" },
+      { "uptoKm": 20, "ratePerKm": 88, "label": "5-20 km" },
+      { "uptoKm": 80, "ratePerKm": 68, "label": "20-80 km" },
+      { "uptoKm": null, "ratePerKm": 52, "label": "Intercity" }
+    ]},
+  { "vehicleClass": "lorry_7t", "baseFare": 1600, "minimumFare": 3000, "timeRatePerMin": 32, "waitingRatePerMin": 38, "deadRunFee": 2200,
+    "distanceBands": [
+      { "uptoKm": 5,  "ratePerKm": 260, "label": "0-5 km" },
+      { "uptoKm": 20, "ratePerKm": 150, "label": "5-20 km" },
+      { "uptoKm": 80, "ratePerKm": 112, "label": "20-80 km" },
+      { "uptoKm": null, "ratePerKm": 86, "label": "Intercity" }
+    ]},
+  { "vehicleClass": "lorry_10t", "baseFare": 2200, "minimumFare": 4200, "timeRatePerMin": 40, "waitingRatePerMin": 46, "deadRunFee": 3000,
+    "distanceBands": [
+      { "uptoKm": 5,  "ratePerKm": 330, "label": "0-5 km" },
+      { "uptoKm": 20, "ratePerKm": 190, "label": "5-20 km" },
+      { "uptoKm": 80, "ratePerKm": 140, "label": "20-80 km" },
+      { "uptoKm": null, "ratePerKm": 108, "label": "Intercity" }
+    ]}
+]

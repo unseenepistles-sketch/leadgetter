@@ -1,0 +1,110 @@
+[
+  {
+    "code": "boda",
+    "displayName": "Boda",
+    "volumeM3": 0.15,
+    "payloadKg": 50,
+    "bedLengthM": 0.6,
+    "enclosed": false,
+    "passengerCapacity": 1,
+    "freeHandlingMinutes": 5,
+    "typicalJob": "Documents, parcels, food, one carton",
+    "enabled": false
+  },
+  {
+    "code": "car_boot",
+    "displayName": "Car (boot)",
+    "volumeM3": 0.4,
+    "payloadKg": 200,
+    "bedLengthM": 1.1,
+    "enclosed": true,
+    "passengerCapacity": 3,
+    "freeHandlingMinutes": 10,
+    "typicalJob": "Passenger + luggage, personal effects",
+    "enabled": false
+  },
+  {
+    "code": "tuktuk",
+    "displayName": "Tuk-tuk",
+    "volumeM3": 0.6,
+    "payloadKg": 300,
+    "bedLengthM": 1.3,
+    "enclosed": false,
+    "passengerCapacity": 2,
+    "freeHandlingMinutes": 10,
+    "typicalJob": "Market runs, small furniture, water drums",
+    "enabled": false
+  },
+  {
+    "code": "pickup_double",
+    "displayName": "Pickup (double cab)",
+    "volumeM3": 1.4,
+    "payloadKg": 800,
+    "bedLengthM": 1.6,
+    "enclosed": false,
+    "passengerCapacity": 4,
+    "freeHandlingMinutes": 15,
+    "typicalJob": "Passenger-carrying + moderate load",
+    "enabled": false
+  },
+  {
+    "code": "pickup_single",
+    "displayName": "Pickup (single cab)",
+    "volumeM3": 2.0,
+    "payloadKg": 1000,
+    "bedLengthM": 2.4,
+    "enclosed": false,
+    "passengerCapacity": 1,
+    "freeHandlingMinutes": 15,
+    "typicalJob": "Small business restock, single appliance",
+    "enabled": true
+  },
+  {
+    "code": "panel_van",
+    "displayName": "Panel van",
+    "volumeM3": 4.0,
+    "payloadKg": 1500,
+    "bedLengthM": 2.8,
+    "enclosed": true,
+    "passengerCapacity": 1,
+    "freeHandlingMinutes": 15,
+    "typicalJob": "Enclosed / rain-safe, electronics, retail",
+    "enabled": false
+  },
+  {
+    "code": "canter_3t",
+    "displayName": "Canter 3t",
+    "volumeM3": 12,
+    "payloadKg": 3000,
+    "bedLengthM": 4.3,
+    "enclosed": false,
+    "passengerCapacity": 2,
+    "freeHandlingMinutes": 30,
+    "typicalJob": "House move (1-2 bed), bulk stock",
+    "enabled": true
+  },
+  {
+    "code": "lorry_7t",
+    "displayName": "Lorry 7t",
+    "volumeM3": 28,
+    "payloadKg": 7000,
+    "bedLengthM": 6.5,
+    "enclosed": false,
+    "passengerCapacity": 2,
+    "freeHandlingMinutes": 45,
+    "typicalJob": "Warehouse, construction materials",
+    "enabled": false
+  },
+  {
+    "code": "lorry_10t",
+    "displayName": "Lorry 10t",
+    "volumeM3": 40,
+    "payloadKg": 10000,
+    "bedLengthM": 8.5,
+    "enclosed": false,
+    "passengerCapacity": 2,
+    "freeHandlingMinutes": 45,
+    "typicalJob": "Intercity freight",
+    "enabled": false
+  }
+]

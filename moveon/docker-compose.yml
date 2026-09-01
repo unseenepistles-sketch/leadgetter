@@ -1,0 +1,28 @@
+# Postgres + PostGIS and Redis, the two stores the brief specifies (§7, §10).
+# Redis holds live driver locations and the dispatch queues; PostGIS holds the
+# persistent geo queries. Neither is needed to run the pricing engine or its
+# tests — Milestone 1 is deliberately storage-free.
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: moveon
+      POSTGRES_PASSWORD: moveon
+      POSTGRES_DB: moveon
+    ports: ['5432:5432']
+    volumes: ['moveon_pg:/var/lib/postgresql/data']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U moveon']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ['6379:6379']
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes: ['moveon_redis:/data']
+
+volumes:
+  moveon_pg:
+  moveon_redis:
