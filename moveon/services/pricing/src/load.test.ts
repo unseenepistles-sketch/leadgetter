@@ -31,10 +31,21 @@ describe('layer 1 — item catalog', () => {
   it('propagates fragile and enclosed requirements from any one item', () => {
     const profile = fromCatalogBasket(defaultConfig, [
       { itemId: 'carton_medium', quantity: 1 },
-      { itemId: 'tv_boxed', quantity: 1 },
+      { itemId: 'display_fridge', quantity: 1 },
     ]);
     expect(profile.fragile).toBe(true);
     expect(profile.requiresEnclosed).toBe(true);
+  });
+
+  it('does not force a van on household goods that travel fine under a tarp', () => {
+    // A fridge or a TV goes on an open canter here every day. `fragile` is the
+    // real signal; enclosure is the customer's call (see the quote request).
+    const profile = fromCatalogBasket(defaultConfig, [
+      { itemId: 'fridge_double_door', quantity: 1 },
+      { itemId: 'tv_boxed', quantity: 1 },
+    ]);
+    expect(profile.fragile).toBe(true);
+    expect(profile.requiresEnclosed).toBe(false);
   });
 
   it('leaves flags clear when nothing in the basket sets them', () => {

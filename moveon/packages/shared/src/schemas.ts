@@ -148,6 +148,13 @@ export const quoteRequestSchema = z.object({
     additionalStops: z.number().int().min(0).default(0),
   }),
   load: loadDeclarationSchema,
+  /**
+   * The customer asking for a closed vehicle. Most goods here travel fine on an
+   * open bed under a tarpaulin, so this is a preference the customer expresses,
+   * not something the catalog decides for them — only genuinely weather-critical
+   * items (a retail display chiller) force it on their own.
+   */
+  requiresEnclosed: z.boolean().default(false),
   /** Customer riding along with the goods. */
   passengers: z.number().int().min(0).default(0),
   /** Stairs at either end. Drives the helper add-on (§5). */

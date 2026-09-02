@@ -206,9 +206,22 @@ describe('surcharges — all disclosed before booking', () => {
     expect(lineAmount(quote.breakdown, 'fragile')).toBe(250);
   });
 
-  it('charges for an enclosed vehicle when the load must stay dry', () => {
-    const quote = priceQuote(defaultConfig, makeRequest({ load: basket(['tv_boxed', 1]), forceVehicleClass: 'panel_van' }), CTX);
+  it('charges for an enclosed vehicle when the goods demand one', () => {
+    const quote = priceQuote(defaultConfig, makeRequest({ load: basket(['display_fridge', 1]), forceVehicleClass: 'panel_van' }), CTX);
     expect(lineAmount(quote.breakdown, 'enclosed')).toBe(400);
+  });
+
+  it('charges for one when the customer simply wants their load kept dry', () => {
+    const quote = priceQuote(defaultConfig, makeRequest({
+      load: basket(['carton_medium', 2]), requiresEnclosed: true, forceVehicleClass: 'panel_van',
+    }), CTX);
+    expect(lineAmount(quote.breakdown, 'enclosed')).toBe(400);
+  });
+
+  it('refuses when the customer wants a closed vehicle and none is running', () => {
+    const config = configWithClasses('pickup_single', 'canter_3t');
+    expect(() => priceQuote(config, makeRequest({ load: basket(['carton_medium', 2]), requiresEnclosed: true }), CTX))
+      .toThrow(/enclosed vehicle/);
   });
 
   it('charges neither for plain dry goods', () => {

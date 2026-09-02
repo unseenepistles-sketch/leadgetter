@@ -39,7 +39,12 @@ export interface QuoteContext {
 }
 
 export function priceQuote(config: ConfigProvider, request: ParsedQuoteRequest, context: QuoteContext): Quote {
-  const load = resolveLoad(config, request.load);
+  const resolved = resolveLoad(config, request.load);
+  // The customer can ask for a closed vehicle even when nothing in the basket
+  // demands one. Either reason produces the same hard filter downstream.
+  const load: LoadProfile = request.requiresEnclosed
+    ? { ...resolved, requiresEnclosed: true }
+    : resolved;
   const pricing = config.pricing();
 
   const { vehicleClass, assessment, tripsRequired, reason } = selectVehicle(config, request, load);
