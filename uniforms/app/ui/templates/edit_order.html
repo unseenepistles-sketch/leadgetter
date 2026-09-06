@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Edit {{ order.pr_number }}</h1>
+<p class="sub">The tailor, the remarks and the two dates belong to the whole order, so a change
+  here is written down every one of its {{ order.lines | length }} lines. Quantities and
+  delivered figures are edited line by line, back on the order.</p>
+
+<form method="post" action="/orders/{{ order.pr_number }}/edit" class="panel">
+  <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px">
+    <div><label>Date raised</label>
+      <input type="date" name="ordered_date" value="{{ order.raised.isoformat() }}"
+             max="{{ today }}" required></div>
+    <div><label>Tailor measured</label>
+      <input type="date" name="measured_date" max="{{ today }}"
+             value="{{ order.measured.isoformat() if order.measured else '' }}">
+      <div class="muted" style="font-size:12px;margin-top:3px">Leave blank if not yet</div></div>
+    <div style="flex:1;min-width:190px"><label>Tailor</label>
+      <input name="tailor" style="width:100%" value="{{ order.tailor or '' }}"
+             placeholder="Who is making it"></div>
+  </div>
+
+  <div style="margin-bottom:14px">
+    <label>Remarks</label>
+    <input name="notes" style="width:100%" value="{{ order.notes or '' }}"
+           placeholder="Anything worth noting about this order">
+  </div>
+
+  <div>
+    <label>Reason for the change (optional)</label>
+    <input name="reason" style="width:100%" placeholder="Recorded in the audit trail">
+  </div>
+
+  <div style="display:flex;gap:12px;align-items:center;margin-top:16px">
+    <span class="muted">Status is {{ order.status.value.replace('_',' ') }} — it follows the
+      quantities, so book deliveries in on the order to move it.</span>
+    <span style="flex:1"></span>
+    <a href="/orders/{{ order.pr_number }}" class="muted" style="text-decoration:none">Cancel</a>
+    <button type="submit">Save changes</button>
+  </div>
+</form>
+{% endblock %}

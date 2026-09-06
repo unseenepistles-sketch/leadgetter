@@ -707,6 +707,66 @@ class UniformService:
         self._log(who, "employee", employee_number, changed, reason)
         return updated
 
+    #: Fields that belong to the order rather than to one of its lines. They are
+    #: stored on every row of the PR, so editing one writes them all.
+    ORDER_HEADER_FIELDS = ("supplier_ref", "notes", "ordered_date", "measured_date")
+
+    def edit_order_header(self, pr_number: str, fields: dict,
+                          *, who: str = "", reason: Optional[str] = None) -> "OrderSummary":
+        """Edit the order itself: the tailor, the remarks and the two dates.
+
+        These are order-level facts held on every row of the PR, so a change is
+        written down all of them — otherwise filtering the sheet by PR number
+        would show the same order with two different tailors.
+        """
+        summary = self.order(pr_number)
+        unknown = set(fields) - set(self.ORDER_HEADER_FIELDS)
+        if unknown:
+            raise ValidationError(f"cannot edit {', '.join(sorted(unknown))}")
+
+        clean: dict[str, object] = {}
+        for name, raw in fields.items():
+            if name in ("ordered_date", "measured_date"):
+                value = _as_date(raw) if raw not in (None, "") else None
+                if name == "ordered_date":
+                    if value is None:
+                        raise ValidationError("the date raised is required")
+                    if value > date.today():
+                        raise ValidationError("the date raised cannot be in the future")
+                elif value is not None:
+                    if value > date.today():
+                        raise ValidationError("the measurement date cannot be in the future")
+                clean[name] = value
+            else:
+                clean[name] = (str(raw).strip() or None) if raw is not None else None
+
+        raised = clean.get("ordered_date", summary.raised)
+        measured = clean.get("measured_date", summary.measured)
+        if measured is not None and raised is not None and measured < raised:
+            raise ValidationError(
+                "the tailor cannot have measured before the order was raised"
+            )
+        if measured is None and summary.delivered > 0 and "measured_date" in clean:
+            raise ValidationError(
+                "clear the deliveries first — the tailor plainly came if the clothes arrived"
+            )
+
+        for line in summary.lines:
+            order = line.order
+            changed = {f: (getattr(order, f), v) for f, v in clean.items()
+                       if getattr(order, f) != v}
+            if not changed:
+                continue
+            key = {"order_id": pr_number, "employee_number": order.employee_number,
+                   "item_code": order.item_code}
+            self.store.update_by_key(ORDERS_SHEET, key, dict(clean))
+            self.snapshot.orders[(pr_number, order.employee_number, order.item_code)] = (
+                replace(order, **clean)
+            )
+            self._log(who, "order",
+                      f"{pr_number}/{order.employee_number}/{order.item_code}", changed, reason)
+        return self.order(pr_number)
+
     def edit_order(self, pr_number: str, employee_number: str, item_code: str, fields: dict,
                    *, who: str = "", reason: Optional[str] = None) -> OrderLine:
         """Edit an order: quantity, requested date, supplier reference, remarks.

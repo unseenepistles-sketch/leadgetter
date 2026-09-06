@@ -500,3 +500,58 @@ def test_a_fully_delivered_order_leaves_the_chase_list(client):
     client.post("/api/orders/PR-1/deliveries", json={
         "parts": [{"employee_number": "E002", "item_code": "SHIRT", "quantity": 2}]})
     assert "Nothing outstanding" in client.get("/pending").text
+
+
+# --- editing an order through the screens ---
+
+def test_editing_the_order_writes_down_every_line(client):
+    """Tailor and remarks are order-level, so filtering the sheet by PR number
+    must not show the same order with two different tailors."""
+    client.post("/api/orders", json={
+        "pr_number": "PR-1", "ordered_date": "2026-01-05",
+        "lines": [{"employee_number": "E002", "item_code": "SHIRT", "quantity": 2},
+                  {"employee_number": "E003", "item_code": "SHIRT", "quantity": 2}]})
+
+    response = client.post("/orders/PR-1/edit", data={
+        "ordered_date": "2026-01-05", "measured_date": "2026-01-20",
+        "tailor": "Al Noor Tailors", "notes": "Balance to follow"},
+        follow_redirects=False)
+    assert response.status_code == 303 and "ok=" in response.headers["location"]
+
+    order = client.get("/api/orders/PR-1").json()
+    assert order["tailor"] == "Al Noor Tailors"
+    assert order["measured"] == "2026-01-20"
+    assert order["status"] == "pending"
+    assert all(l["tailor"] == "Al Noor Tailors" for l in order["lines"])
+    assert all(l["measured_date"] == "2026-01-20" for l in order["lines"])
+
+
+def test_the_edit_form_refuses_a_measurement_before_the_order(client):
+    client.post("/api/orders", json={
+        "pr_number": "PR-1", "ordered_date": "2026-06-01",
+        "lines": [{"employee_number": "E002", "item_code": "SHIRT", "quantity": 2}]})
+    response = client.post("/orders/PR-1/edit", data={
+        "ordered_date": "2026-06-01", "measured_date": "2026-05-01", "tailor": ""},
+        follow_redirects=False)
+    assert "err=" in response.headers["location"]
+
+
+def test_the_measurement_date_cannot_be_cleared_once_clothes_arrived(client):
+    client.post("/api/orders", json={
+        "pr_number": "PR-1", "ordered_date": "2026-01-05",
+        "lines": [{"employee_number": "E002", "item_code": "SHIRT", "quantity": 2}]})
+    client.post("/api/orders/PR-1/measurement", json={"measured_date": "2026-01-20"})
+    client.post("/api/orders/PR-1/deliveries", json={
+        "parts": [{"employee_number": "E002", "item_code": "SHIRT", "quantity": 2}]})
+
+    response = client.post("/orders/PR-1/edit", data={
+        "ordered_date": "2026-01-05", "measured_date": ""}, follow_redirects=False)
+    assert "err=" in response.headers["location"]
+    assert client.get("/api/orders/PR-1").json()["measured"] == "2026-01-20"
+
+
+def test_the_order_page_offers_an_edit_button(client):
+    client.post("/api/orders", json={
+        "pr_number": "PR-1",
+        "lines": [{"employee_number": "E002", "item_code": "SHIRT", "quantity": 2}]})
+    assert "/orders/PR-1/edit" in client.get("/orders/PR-1").text

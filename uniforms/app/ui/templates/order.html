@@ -5,6 +5,8 @@
     <p class="sub">{{ order.people }} staff · {{ order.ordered }} item(s)
       · {{ order.tailor or 'no tailor recorded' }}</p></div>
   <span style="flex:1"></span>
+  <a href="/orders/{{ order.pr_number }}/edit" style="text-decoration:none">
+    <button type="button" class="ghost">Edit order</button></a>
   {% if not order.measured %}
   <form method="post" action="/orders/{{ order.pr_number }}/measurement"
         style="display:flex;gap:6px;align-items:center">
@@ -62,14 +64,24 @@
       <td class="right">{{ l.delivered }}</td>
       <td class="right">{{ l.pending or '—' }}</td>
       <td>{{ l.last_delivery.strftime('%d %b %Y') if l.last_delivery else '—' }}</td>
-      <td>{% if l.is_open and order.measured %}
-        <form method="post" style="display:flex;gap:6px"
+      <td style="white-space:nowrap">
+        {% if l.is_open and order.measured %}
+        <form method="post" style="display:inline-flex;gap:6px;vertical-align:middle"
               action="/orders/{{ order.pr_number }}/{{ l.order.employee_number }}/{{ l.order.item_code }}/deliver">
           <input type="number" name="quantity" value="{{ l.pending }}" min="1" max="{{ l.pending }}"
                  style="width:62px" aria-label="Quantity received">
           <button type="submit" class="ghost">Receive</button>
         </form>
-      {% endif %}</td>
+        {% endif %}
+        {# Correcting what was ordered, as opposed to booking in what arrived. #}
+        <form method="post" style="display:inline-flex;gap:6px;vertical-align:middle"
+              action="/orders/{{ order.pr_number }}/{{ l.order.employee_number }}/{{ l.order.item_code }}/edit">
+          <input type="number" name="quantity" value="{{ l.order.quantity }}" min="{{ l.delivered or 1 }}"
+                 max="99" style="width:58px" aria-label="Quantity ordered"
+                 title="How many were ordered">
+          <button type="submit" class="ghost">Save</button>
+        </form>
+      </td>
     </tr>
     {% endfor %}
   {% endfor %}

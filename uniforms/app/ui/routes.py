@@ -486,6 +486,37 @@ def order_detail(request: Request, pr_number: str):
     )
 
 
+@router.get("/orders/{pr_number}/edit")
+def edit_order_form(request: Request, pr_number: str):
+    service = get_service()
+    try:
+        summary = service.order(pr_number)
+    except NotFound:
+        return _back("/orders", err=f"No order {pr_number}.")
+    return _render(request, "edit_order.html", "orders",
+                   order=summary, today=date.today().isoformat())
+
+
+@router.post("/orders/{pr_number}/edit")
+async def edit_order_header_submit(pr_number: str, request: Request):
+    """The order itself: tailor, remarks, and the two dates."""
+    form = await request.form()
+    fields = {
+        "supplier_ref": form.get("tailor") or None,
+        "notes": form.get("notes") or None,
+        "ordered_date": form.get("ordered_date") or None,
+        "measured_date": form.get("measured_date") or None,
+    }
+    try:
+        get_service().edit_order_header(
+            pr_number, fields, who=_actor(request, form),
+            reason=form.get("reason") or None,
+        )
+    except (ValidationError, NotFound) as exc:
+        return _back(f"/orders/{pr_number}/edit", err=str(exc))
+    return _back(f"/orders/{pr_number}", ok=f"{pr_number} updated.")
+
+
 #: How long a promised-but-undelivered garment may sit before it needs chasing.
 CHASE_DAYS = 30
 
