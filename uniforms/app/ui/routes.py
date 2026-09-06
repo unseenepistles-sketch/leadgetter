@@ -486,6 +486,22 @@ def order_detail(request: Request, pr_number: str):
     )
 
 
+#: How long a promised-but-undelivered garment may sit before it needs chasing.
+CHASE_DAYS = 30
+
+
+@router.get("/pending")
+def pending(request: Request):
+    """The chase list: what the tailor still owes, and how long it has been owed."""
+    rows = get_service().outstanding_lines()
+    return _render(
+        request, "pending.html", "pending",
+        rows=rows, pieces=sum(r["outstanding"] for r in rows),
+        chasing=[r for r in rows if r["waiting_days"] >= CHASE_DAYS],
+        chase_days=CHASE_DAYS,
+    )
+
+
 @router.get("/reports")
 def reports(
     request: Request,

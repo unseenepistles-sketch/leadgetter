@@ -340,6 +340,41 @@ class UniformService:
         rows.sort(key=lambda r: (r.raised, r.pr_number), reverse=True)
         return rows
 
+    def outstanding_lines(self, today: Optional[date] = None) -> list[dict]:
+        """Every garment ordered and not yet handed over, longest wait first.
+
+        The tailor routinely delivers part of an order and says the rest will
+        follow, and "the rest" is exactly what gets forgotten. The wait is
+        measured from the measurement visit, or from the last part-delivery if
+        there has been one — that is the point from which the balance was owed.
+        """
+        today = today or date.today()
+        rows: list[dict] = []
+        for summary in self.orders():
+            if summary.measured is None:
+                continue          # nothing is owed until the tailor has taken sizes
+            for line in summary.lines:
+                if line.order.cancelled or line.pending <= 0:
+                    continue
+                since = line.last_delivery or summary.measured
+                rows.append({
+                    "pr_number": summary.pr_number,
+                    "employee_number": line.order.employee_number,
+                    "employee_name": line.employee_name,
+                    "role": line.role,
+                    "item_code": line.order.item_code,
+                    "item_name": line.item_name,
+                    "size": line.order.size,
+                    "ordered": line.order.quantity,
+                    "delivered": line.delivered,
+                    "outstanding": line.pending,
+                    "promised_since": since,
+                    "waiting_days": (today - since).days,
+                    "part_delivered": line.delivered > 0,
+                })
+        rows.sort(key=lambda r: r["waiting_days"], reverse=True)
+        return rows
+
     def pending_delivery(self) -> int:
         """Pieces ordered that have not arrived — her 'items pending delivery'."""
         return sum(line.pending for line in self.order_lines(open_only=True))

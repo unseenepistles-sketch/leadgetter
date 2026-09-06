@@ -464,3 +464,39 @@ def test_an_override_is_authorised_by_the_signed_in_user(secure_client):
               "authorised_by": "someone-else"},
     ).json()
     assert body["authorised_by"] == "boss"
+
+
+# --- the chase list: what the tailor still owes ---
+
+def test_still_to_come_lists_the_outstanding_balance(client):
+    client.post("/api/orders", json={
+        "pr_number": "PR-1",
+        "lines": [{"employee_number": "E002", "item_code": "SHIRT", "quantity": 6}]})
+    client.post("/api/orders/PR-1/measurement", json={})
+    client.post("/api/orders/PR-1/deliveries", json={
+        "parts": [{"employee_number": "E002", "item_code": "SHIRT", "quantity": 4}]})
+
+    page = client.get("/pending")
+    assert page.status_code == 200
+    assert "Still to come" in page.text
+    # The name leads; the payroll number is the subtitle.
+    assert 'class="who">Amina Yusuf' in page.text
+    assert page.text.index('class="who">Amina Yusuf') < page.text.index('class="idno">E002')
+
+
+def test_nothing_is_owed_before_the_tailor_has_measured(client):
+    """An unmeasured order is not late — nobody has been sized yet."""
+    client.post("/api/orders", json={
+        "pr_number": "PR-1",
+        "lines": [{"employee_number": "E002", "item_code": "SHIRT", "quantity": 6}]})
+    assert "Nothing outstanding" in client.get("/pending").text
+
+
+def test_a_fully_delivered_order_leaves_the_chase_list(client):
+    client.post("/api/orders", json={
+        "pr_number": "PR-1",
+        "lines": [{"employee_number": "E002", "item_code": "SHIRT", "quantity": 2}]})
+    client.post("/api/orders/PR-1/measurement", json={})
+    client.post("/api/orders/PR-1/deliveries", json={
+        "parts": [{"employee_number": "E002", "item_code": "SHIRT", "quantity": 2}]})
+    assert "Nothing outstanding" in client.get("/pending").text

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Still to come</h1>
+<p class="sub">{{ pieces }} item(s) ordered and not yet handed over. The tailor often brings part
+  of an order and says the rest will follow — this is that balance, longest wait first.</p>
+
+{% if chasing %}
+<div class="flash err">
+  <b>{{ chasing | length }} line(s) have been waiting over {{ chase_days }} days.</b>
+  Worth a call to the tailor.
+</div>
+{% endif %}
+
+<div class="panel scroll">
+<table>
+  <thead><tr><th>Employee name</th><th>Item</th><th>PR number</th><th class="right">Ordered</th>
+    <th class="right">Delivered</th><th class="right">Still to come</th><th>Waiting</th>
+    <th></th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr class="{{ 'late' if r.waiting_days >= chase_days }}">
+      <td><a href="/employees/{{ r.employee_number }}" class="who">{{ r.employee_name }}</a>
+        <span class="idno">{{ r.employee_number }} · {{ r.role or 'no role' }}</span></td>
+      <td>{{ r.item_name }}{% if r.size %} <span class="muted">· {{ r.size }}</span>{% endif %}</td>
+      <td><a href="/orders/{{ r.pr_number }}">{{ r.pr_number }}</a></td>
+      <td class="right">{{ r.ordered }}</td>
+      <td class="right">{{ r.delivered or '—' }}</td>
+      <td class="right"><b>{{ r.outstanding }}</b></td>
+      <td>{{ r.waiting_days }} day(s){% if r.part_delivered %}
+        <span class="muted">· part-delivered</span>{% endif %}</td>
+      <td>
+        <form method="post" style="display:flex;gap:6px"
+              action="/orders/{{ r.pr_number }}/{{ r.employee_number }}/{{ r.item_code }}/deliver">
+          <input type="number" name="quantity" value="{{ r.outstanding }}" min="1"
+                 max="{{ r.outstanding }}" style="width:62px" aria-label="Quantity received">
+          <button type="submit" class="ghost">Book in</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="8" class="muted">Nothing outstanding — every order has been delivered
+      in full.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

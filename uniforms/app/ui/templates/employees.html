@@ -16,12 +16,12 @@
 
 <div class="panel scroll">
 <table>
-  <thead><tr><th>Number</th><th>Name</th><th>Department</th><th>Role</th><th>Joined</th><th>Status</th><th>Outstanding</th></tr></thead>
+  <thead><tr><th>Name</th><th>Department</th><th>Role</th><th>Joined</th><th>Status</th><th>Outstanding</th></tr></thead>
   <tbody>
   {% for e in page.items %}
     <tr>
-      <td><a href="/employees/{{ e.employee_number }}">{{ e.employee_number }}</a></td>
-      <td>{{ e.full_name }}</td>
+      <td><a href="/employees/{{ e.employee_number }}" class="who">{{ e.full_name }}</a>
+        <span class="idno">{{ e.employee_number }}</span></td>
       <td>{{ e.department or '—' }}</td>
       <td>{{ e.role or '—' }}</td>
       <td>{{ e.join_date.strftime('%d %b %Y') if e.join_date else '—' }}</td>
@@ -29,7 +29,7 @@
       <td class="right">{{ outstanding.get(e.employee_number, 0) or '' }}</td>
     </tr>
   {% else %}
-    <tr><td colspan="7" class="muted">No employees match.</td></tr>
+    <tr><td colspan="6" class="muted">No employees match.</td></tr>
   {% endfor %}
   </tbody>
 </table>

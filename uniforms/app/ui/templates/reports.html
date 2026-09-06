@@ -16,12 +16,12 @@
 
 <div class="panel scroll">
 <table>
-  <thead><tr><th>Employee</th><th>Number</th><th>Item</th><th>Qty</th><th>Last issued</th><th>Next due</th><th>Status</th></tr></thead>
+  <thead><tr><th>Employee</th><th>Item</th><th>Qty</th><th>Last issued</th><th>Next due</th><th>Status</th></tr></thead>
   <tbody>
   {% for s in page.items %}
     <tr>
-      <td><a href="/employees/{{ s.employee_number }}">{{ s.employee_name }}</a></td>
-      <td>{{ s.employee_number }}</td>
+      <td><a href="/employees/{{ s.employee_number }}" class="who">{{ s.employee_name }}</a>
+        <span class="idno">{{ s.employee_number }}</span></td>
       <td>{{ s.item_name }}</td>
       <td>{{ s.quantity }}</td>
       <td>{{ s.last_issued.strftime('%d %b %Y') if s.last_issued else '—' }}</td>
@@ -29,7 +29,7 @@
       <td>{{ status_pill(s.status.value) }}</td>
     </tr>
   {% else %}
-    <tr><td colspan="7" class="muted">Nothing to show.</td></tr>
+    <tr><td colspan="6" class="muted">Nothing to show.</td></tr>
   {% endfor %}
   </tbody>
 </table>
