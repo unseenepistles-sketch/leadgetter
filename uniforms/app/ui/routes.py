@@ -71,6 +71,7 @@ def _render(request: Request, template: str, active: str, **context):
         request, template,
         {
             "brand": get_settings().brand_name,
+            "writes_held": get_store().writes_held,
             "active": active,
             "user": current_user(request),
             "auth_on": get_auth().enabled,
@@ -531,6 +532,27 @@ def pending(request: Request):
         chasing=[r for r in rows if r["waiting_days"] >= chase_days],
         chase_days=chase_days,
     )
+
+
+@router.get("/workbook/review")
+def workbook_review(request: Request):
+    """What somebody changed in Excel, before the app adopts it."""
+    service = get_service()
+    diff = service.pending_workbook_change()
+    return _render(request, "review.html", "review",
+                   diff=diff, store=get_store())
+
+
+@router.post("/workbook/review/accept")
+def workbook_review_accept():
+    get_service().accept_workbook_change()
+    return _back("/", ok="Change accepted. The system is up to date with the file.")
+
+
+@router.post("/workbook/review/discard")
+def workbook_review_discard():
+    get_service().discard_workbook_change()
+    return _back("/", ok="Left as it is. Your queued changes will save as normal.")
 
 
 @router.get("/reports")

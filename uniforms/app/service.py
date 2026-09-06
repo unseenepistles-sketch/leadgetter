@@ -34,6 +34,7 @@ from .excelstore.schema import (
     ORDERS_SHEET,
     SIZE_FIELDS,
 )
+from .excelstore.review import WorkbookDiff, diff_snapshots
 from .excelstore.workbook import Snapshot, WorkbookStore
 
 #: employee sheet column -> the size key held on the record.
@@ -339,6 +340,26 @@ class UniformService:
             rows = [r for r in rows if r.status is wanted]
         rows.sort(key=lambda r: (r.raised, r.pr_number), reverse=True)
         return rows
+
+    # ------------------------------------------- edits made in Excel itself
+
+    def pending_workbook_change(self) -> Optional[WorkbookDiff]:
+        """What an edit made in Excel would do, if one is waiting.
+
+        Returns None when there is nothing to review. Writes are held while
+        this is not None, so the app is never simultaneously serving one view
+        of the file and writing another.
+        """
+        candidate = self.store.pending_review
+        if candidate is None:
+            return None
+        return diff_snapshots(self.snapshot, candidate)
+
+    def accept_workbook_change(self) -> Snapshot:
+        return self.store.accept_pending()
+
+    def discard_workbook_change(self) -> None:
+        self.store.discard_pending()
 
     def outstanding_lines(self, today: Optional[date] = None) -> list[dict]:
         """Every garment ordered and not yet handed over, longest wait first.

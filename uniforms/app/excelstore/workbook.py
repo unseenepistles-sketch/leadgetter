@@ -192,6 +192,9 @@ class WorkbookStore:
         self._snapshot = Snapshot()
         #: Appends and updates awaiting a flush, in the order they were made.
         self._pending: list[Append | Update] = []
+        #: An edit made in Excel, parsed but not yet accepted. While this is set,
+        #: writes are held so a flush cannot overwrite what somebody typed.
+        self._pending_review: Optional[Snapshot] = None
         self._flush_thread: Optional[threading.Thread] = None
         self._flush_requested = threading.Event()
         self._stopping = threading.Event()
@@ -210,8 +213,12 @@ class WorkbookStore:
         with self._lock:
             return len(self._pending)
 
-    def load(self) -> Snapshot:
-        """Parse the whole workbook into a fresh index."""
+    def read(self) -> Snapshot:
+        """Parse the workbook without adopting the result.
+
+        Separate from :meth:`load` so a change made in Excel can be read and
+        described *before* it becomes the app's view of the world.
+        """
         if not self.path.exists():
             raise WorkbookError(f"workbook not found: {self.path}")
 
@@ -229,18 +236,29 @@ class WorkbookStore:
 
         snap.loaded_at = datetime.now()
         snap.source_mtime = mtime
+        log.info("read %s in %.2fs: %s", self.path.name,
+                 time.monotonic() - started, snap.counts)
+        return snap
+
+    def load(self) -> Snapshot:
+        """Parse the workbook and adopt it as the current view."""
+        snap = self.read()
+        started = time.monotonic()
         with self._lock:
             self._snapshot = snap
-        log.info(
-            "loaded %s in %.2fs: %s",
-            self.path.name,
-            time.monotonic() - started,
-            snap.counts,
-        )
+            self._pending_review = None
         return snap
 
     def reload_if_changed(self) -> bool:
-        """Re-read when someone has edited the file behind our back."""
+        """Notice an edit made in Excel and hold it for review.
+
+        The change is **not** adopted. A mistyped row, a sort applied to one
+        column instead of the whole sheet, or a stray delete arrives looking
+        exactly like a deliberate edit, so it is parsed, kept aside and
+        described. Writes are held meanwhile — our queued rows were worked out
+        against the old picture, and flushing them over somebody's edit would
+        destroy it.
+        """
         try:
             mtime = self.path.stat().st_mtime
         except OSError:
@@ -250,8 +268,58 @@ class WorkbookStore:
             # Our own flush moved the mtime; no need to re-parse for that.
             if mtime in (known, self._last_written_mtime):
                 return False
-        self.load()
+            if self._pending_review is not None and \
+                    self._pending_review.source_mtime == mtime:
+                return False        # already waiting on this same edit
+
+        try:
+            candidate = self.read()
+        except WorkbookError as exc:
+            # A file mid-save reads as corrupt. Keep serving what we have and
+            # try again on the next poll rather than blanking the system.
+            log.warning("workbook changed but could not be read: %s", exc)
+            return False
+
+        with self._lock:
+            self._pending_review = candidate
+        log.info("workbook edited outside the app; held for review")
         return True
+
+    @property
+    def pending_review(self) -> Optional[Snapshot]:
+        """The edit waiting to be accepted, if there is one."""
+        with self._lock:
+            return self._pending_review
+
+    @property
+    def writes_held(self) -> bool:
+        return self.pending_review is not None
+
+    def accept_pending(self) -> Snapshot:
+        """Adopt the reviewed edit and let writes flow again."""
+        with self._lock:
+            candidate = self._pending_review
+            if candidate is None:
+                return self._snapshot
+            self._snapshot = candidate
+            self._pending_review = None
+        log.info("workbook edit accepted: %s", candidate.counts)
+        self.request_flush()
+        return candidate
+
+    def discard_pending(self) -> None:
+        """Stop holding writes without adopting the edit.
+
+        The next flush writes our queued rows into the edited file, so her
+        change stays on disk and ours lands on top. Nothing is reverted — this
+        says "I have seen it", not "undo it".
+        """
+        with self._lock:
+            candidate, self._pending_review = self._pending_review, None
+            if candidate is not None:
+                # Keep the mtime so the same edit is not offered again.
+                self._snapshot.source_mtime = candidate.source_mtime
+        self.request_flush()
 
     # ----------------------------------------------------------------- writes
 
@@ -387,8 +455,15 @@ class WorkbookStore:
                 time.sleep(5)
 
     def flush(self) -> int:
-        """Persist queued rows. Returns how many were written."""
+        """Persist queued rows. Returns how many were written.
+
+        Held while an edit made in Excel is awaiting review: our queued rows were
+        worked out against the old picture of the file, so writing them over
+        somebody's unreviewed change would destroy it. They stay queued.
+        """
         with self._lock:
+            if self._pending_review is not None:
+                return 0
             if not self._pending:
                 return 0
             batch = list(self._pending)

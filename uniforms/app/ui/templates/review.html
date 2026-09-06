@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block body %}
+{% if not diff %}
+  <h1>Nothing to review</h1>
+  <p class="sub">The system is up to date with the workbook. When somebody edits the file in
+    Excel, what they changed appears here before it takes effect.</p>
+  <a href="/" style="text-decoration:none"><button type="button">Back to the dashboard</button></a>
+{% else %}
+  <h1>Somebody edited the workbook</h1>
+  <p class="sub">These changes are in the file but the system has not taken them on yet.
+    Check them, then accept. Nothing you record in the app is being saved until you do, so
+    don't leave this sitting.</p>
+
+  <div class="flash {{ 'err' if diff.removals else 'ok' }}">
+    <b>{{ diff.headline() }}</b>
+    {% if diff.removals %} Deletions are the usual sign of a mistake, so look at those first.
+    {% endif %}
+  </div>
+
+  {% if diff.new_problems %}
+  <div class="panel">
+    <h2>Rows that can no longer be read</h2>
+    <ul>{% for p in diff.new_problems %}<li>{{ p }}</li>{% endfor %}</ul>
+    <p class="muted">These are left out of the figures until they are fixed in the file.</p>
+  </div>
+  {% endif %}
+
+  {% for group, title in [('removed', 'Removed'), ('added', 'Added'), ('edited', 'Changed')] %}
+    {% set rows = diff.changes | selectattr('action', 'equalto', group) | list %}
+    {% if rows %}
+    <div class="panel scroll">
+      <h2>{{ title }} ({{ rows | length }})</h2>
+      <table>
+        <thead><tr><th>What</th><th>Record</th><th>Detail</th></tr></thead>
+        <tbody>
+        {% for c in rows %}
+          <tr class="{{ 'late' if group == 'removed' }}">
+            <td class="muted">{{ c.kind }}</td>
+            <td><b>{{ c.key }}</b></td>
+            <td>{{ c.summary or '—' }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  {% endfor %}
+
+  <div class="panel">
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <form method="post" action="/workbook/review/accept">
+        <button type="submit">Accept these changes</button>
+      </form>
+      <form method="post" action="/workbook/review/discard">
+        <button type="submit" class="ghost">Leave it, save my work anyway</button>
+      </form>
+      <span class="muted" style="flex:1;min-width:260px;font-size:13px">
+        <b>Accept</b> takes the file as it now stands. <b>Leave it</b> keeps the file as it is
+        too, but lets the app save what you have recorded on top. Neither undoes anything
+        in the workbook, so if the edit was a mistake, fix it in Excel and save again.
+      </span>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

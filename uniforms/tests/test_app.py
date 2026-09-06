@@ -537,3 +537,31 @@ def test_the_order_page_offers_an_edit_button(client):
         "pr_number": "PR-1",
         "lines": [{"employee_number": "E002", "item_code": "SHIRT", "quantity": 2}]})
     assert "/orders/PR-1/edit" in client.get("/orders/PR-1").text
+
+
+# --- reviewing an edit somebody made in Excel ---
+
+def test_the_review_page_is_quiet_when_nothing_changed(client):
+    assert "Nothing to review" in client.get("/workbook/review").text
+
+
+def test_an_excel_edit_raises_a_banner_and_a_review(client, tmp_path):
+    from openpyxl import load_workbook
+    from app import deps
+
+    store = deps.get_store()
+    wb = load_workbook(store.path)
+    wb["Employees"].delete_rows(2)
+    wb.save(store.path)
+    wb.close()
+    assert store.reload_if_changed() is True
+
+    page = client.get("/workbook/review")
+    assert "Somebody edited the workbook" in page.text
+    assert "employees removed" in page.text
+    # and it is visible from anywhere, not just if she goes looking
+    assert "Workbook edited" in client.get("/").text
+
+    accepted = client.post("/workbook/review/accept", follow_redirects=False)
+    assert accepted.status_code == 303
+    assert "Nothing to review" in client.get("/workbook/review").text

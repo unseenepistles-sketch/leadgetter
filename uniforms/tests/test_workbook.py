@@ -203,13 +203,69 @@ def test_reload_if_changed_is_a_no_op_when_untouched(clean):
     assert clean.reload_if_changed() is False
 
 
-def test_reload_if_changed_picks_up_an_external_edit(clean):
-    wb = load_workbook(clean.path)
-    wb["Issuances"].append(["E002", "SHIRT", date(2024, 7, 1), 3, "M", "hand-typed", 12, ""])
-    wb.save(clean.path)
+def _edit_in_excel(store, sheet="Issuances", row=None):
+    """Whatever a human doing this in Excel would leave behind."""
+    wb = load_workbook(store.path)
+    wb[sheet].append(row or ["E002", "SHIRT", date(2024, 7, 1), 3, "M", "hand-typed", 12, ""])
+    wb.save(store.path)
     wb.close()
+
+
+def test_an_edit_in_excel_is_held_rather_than_adopted(clean):
+    """A stray delete arrives looking exactly like a deliberate change, so
+    nothing takes effect until somebody has looked at it."""
+    _edit_in_excel(clean)
     assert clean.reload_if_changed() is True
+    assert clean.pending_review is not None
+    assert clean.writes_held is True
+    # the app is still serving the picture it had before
+    assert clean.snapshot.issuances_for("E002") == []
+
+
+def test_the_same_edit_is_only_offered_once(clean):
+    _edit_in_excel(clean)
+    assert clean.reload_if_changed() is True
+    assert clean.reload_if_changed() is False
+
+
+def test_accepting_an_edit_adopts_it_and_frees_writes(clean):
+    _edit_in_excel(clean)
+    clean.reload_if_changed()
+    clean.accept_pending()
+    assert clean.writes_held is False
     assert len(clean.snapshot.issuances_for("E002")) == 1
+
+
+def test_writes_are_held_while_an_edit_waits(clean):
+    """Our queued rows were worked out against the old file. Flushing them over
+    somebody's unreviewed edit would destroy it."""
+    clean.append_issuance(Issuance("E003", "SHIRT", date(2024, 6, 1)))
+    _edit_in_excel(clean)
+    clean.reload_if_changed()
+    assert clean.flush() == 0
+    assert clean.pending_writes == 1          # queued, not dropped
+
+    clean.accept_pending()
+    assert clean.flush() == 1
+
+
+def test_discarding_frees_writes_without_reverting_the_file(clean):
+    """Discard means "I have seen it", not "undo it" — her rows stay on disk."""
+    _edit_in_excel(clean)
+    clean.reload_if_changed()
+    clean.discard_pending()
+    assert clean.writes_held is False
+    assert clean.reload_if_changed() is False   # not offered again
+    # the row she typed is still in the file
+    assert load_workbook(clean.path)["Issuances"].max_row >= 2
+
+
+def test_a_file_caught_mid_save_is_not_adopted(clean, monkeypatch):
+    """Half-written files read as corrupt. Keep serving what we have."""
+    clean.path.write_bytes(b"not a workbook at all")
+    assert clean.reload_if_changed() is False
+    assert clean.pending_review is None
+    assert clean.snapshot.employees            # still serving the good data
 
 
 def test_our_own_write_does_not_trigger_a_reload(clean):
