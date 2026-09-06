@@ -44,35 +44,12 @@ class Settings:
         #: How often to notice that someone edited the workbook by hand.
         self.reload_poll_seconds = _int(os.getenv("RELOAD_POLL_SECONDS"), 60)
 
-        # --- our own bookkeeping, deliberately NOT in their workbook ---
-        self.ledger_path = os.getenv("LEDGER_PATH", "./data/reminders.sqlite3")
-
         # --- policy ---
         self.due_soon_days = _int(os.getenv("DUE_SOON_DAYS"), 180)
         self.overdue_grace_days = _int(os.getenv("OVERDUE_GRACE_DAYS"), 30)
         self.first_issue_grace_days = _int(os.getenv("FIRST_ISSUE_GRACE_DAYS"), 30)
-
-        # --- reminders ---
-        self.reminders_enabled = _bool(os.getenv("REMINDERS_ENABLED"), False)
-        self.reminders_dry_run = _bool(os.getenv("REMINDERS_DRY_RUN"), True)
-        self.reminder_hour = _int(os.getenv("REMINDER_HOUR"), 7)
-        #: Nothing whose due date precedes this ever sends — the go-live guard.
-        self.reminders_start_date = os.getenv("REMINDERS_START_DATE", "")
-        #: Hard ceiling per run. Stops a misconfiguration mailing the whole company.
-        self.max_sends_per_run = _int(os.getenv("MAX_SENDS_PER_RUN"), 200)
-        #: Outside production every recipient is rewritten to these addresses.
-        self.recipient_allowlist = [
-            a.strip() for a in os.getenv("RECIPIENT_ALLOWLIST", "").split(",") if a.strip()
-        ]
-        self.stores_email = os.getenv("STORES_EMAIL", "")
-
-        # --- smtp ---
-        self.smtp_host = os.getenv("SMTP_HOST", "")
-        self.smtp_port = _int(os.getenv("SMTP_PORT"), 25)
-        self.smtp_user = os.getenv("SMTP_USER", "")
-        self.smtp_password = os.getenv("SMTP_PASSWORD", "")
-        self.smtp_from = os.getenv("SMTP_FROM", "uniforms@example.com")
-        self.smtp_starttls = _bool(os.getenv("SMTP_STARTTLS"), True)
+        #: How long a promised but undelivered garment may sit before it needs chasing.
+        self.chase_after_days = _int(os.getenv("CHASE_AFTER_DAYS"), 30)
 
         self.brand_name = os.getenv("BRAND_NAME", "Uniform Manager")
 
@@ -83,20 +60,9 @@ class Settings:
         self.auth_users = os.getenv("AUTH_USERS", "")
         self.secret_key = os.getenv("SECRET_KEY", "")
 
-    @property
-    def smtp_enabled(self) -> bool:
-        return bool(self.smtp_host)
-
-    @property
-    def sending_for_real(self) -> bool:
-        return self.reminders_enabled and not self.reminders_dry_run and self.smtp_enabled
-
     def capabilities(self) -> dict[str, bool]:
         return {
             "Workbook": Path(self.workbook_path).exists(),
-            "SMTP configured": self.smtp_enabled,
-            "Reminders enabled": self.reminders_enabled,
-            "Live sending": self.sending_for_real,
             "Sign-in required": self.auth_enabled and bool(self.auth_users),
         }
 

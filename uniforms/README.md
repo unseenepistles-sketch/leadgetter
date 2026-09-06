@@ -1,7 +1,8 @@
 # Uniform Management System
 
 Tracks which uniforms each employee has been issued, works out what is due, shows who was
-missed, and sends reminder emails — with **their existing Excel workbook as the database**.
+missed, and chases what the tailor has not yet delivered — with **their existing Excel
+workbook as the database**.
 
 Employees receive a kit on joining, then renew on staggered cycles: shirts and trousers every
 12 months, blazers and other durable items every 24. The cycle lengths live in the spreadsheet,
@@ -25,13 +26,6 @@ to parse it, so re-reading it per request is impossible. Instead:
 * **Never write in place** — write to a temp file, then atomically replace. Timestamped backups
   before every flush, most recent 10 kept.
 
-### The one thing that is not in their workbook
-
-The record of **which reminders have already been sent** lives in a small SQLite file the app
-owns. It needs a real uniqueness guarantee: if that state sat in a spreadsheet, someone
-re-sorting or deleting rows would re-email ten thousand people. Everything the client thinks of
-as *their data* stays in Excel.
-
 ## Sheets it reads
 
 Column headers are matched **by name, not position**, against a list of aliases — so "Staff ID",
@@ -49,23 +43,43 @@ Tab names are matched loosely too: `Staff List`, `Uniforms`, `Allocations` and `
 all recognised.
 
 Anything unparseable becomes a **visible problem on the Data Quality page** and is excluded from
-reminders — never guessed at, and never turned into a confidently wrong email.
+the renewal figures — never guessed at, and never turned into a confidently
+wrong due date.
 
-## Ordering
+## Orders
 
-Ordering and handing over are separate events, often weeks apart, and an order
-routinely arrives in parts. An **order** is a request; an **issuance** is its
-fulfilment, carrying the order it satisfies.
+The real sequence: she raises an order against a **PR number**, the tailor visits
+to take **measurements**, and the tailor returns with the clothes — sometimes all
+of them, sometimes some now and the rest later.
+
+The PR number *is* the order's identity. She is issued one per order and types it
+in, so a synthetic id would be one more thing to keep in step with the paperwork.
+
+One PR covers a whole bulk order — thirty-five people and a hundred and sixty-eight
+lines is a normal one — so order lines are keyed by **(PR, employee, item)**.
+Keying on the PR alone treats the second person on an order as a duplicate.
+
+| Status | Meaning |
+|---|---|
+| `awaiting_measurement` | Raised, but the tailor has not been to take sizes |
+| `pending` | Measured, nothing delivered yet |
+| `partially_delivered` | Some of it arrived; a balance is outstanding |
+| `delivered` | All of it arrived |
+| `cancelled` | — |
+
+Measurement is its own stage because an order can sit there for weeks, and "the
+tailor has not been yet" is a different problem from "the tailor has not
+delivered". A delivery is refused until the visit is recorded — but a recorded
+delivery outranks a missing measurement date, because if the clothes are here the
+tailor plainly came.
 
 Two things follow, and both matter:
 
-* **"1/2 delivered" is always computed** from real handovers, never a number
-  somebody has to remember to update.
+* **"4 of 6 delivered" is always computed** from real handovers, never a number
+  somebody has to remember to update. An order's status comes from its totals by
+  the same rule a single line uses.
 * **The renewal clock starts at delivery, not at the order.** Ordered in January,
-  arrived in June, renews next June.
-
-Order statuses are `Pending`, `Partially Delivered` and `Delivered`, plus
-`Cancelled`. Each part-delivery keeps its own date.
+  arrived in June, renews next June. Each part-delivery keeps its own date.
 
 ## Editing and administration
 
@@ -126,43 +140,30 @@ checks are already in the right places for that.
 | `due` | Due now |
 | `due_soon` | Within 6 months of the next renewal |
 | `ok` | Up to date |
-| `needs_review` | Data too poor to judge. Suppressed from reminders. |
+| `needs_review` | Data too poor to judge. Shown on the data quality page instead. |
 
 `never_issued` is why the engine walks *employees × entitlements* rather than scanning the
 issuance log: someone never given a blazer has no row anywhere, so no query over issuances could
 ever find them.
 
-## Reminders
+## Chasing what has not arrived
 
-Daily job. Each stage fires once, then the item moves to the next as time passes.
+Alerts here are **visual, not email**. Two screens carry them:
 
-| Stage | When | To |
-|---|---|---|
-| `T6M` | 6 months before due | **Stores** + employee — this is a procurement lead-time signal |
-| `T1M` | 1 month before due | Employee |
-| `DUE` | on the due date | Employee |
-| `OVERDUE_30` | 30 days past due | Employee + manager |
-| `NEVER_ISSUED` | after the joining grace period | Stores + manager |
+* **Renewal alerts** — anything within six months of its renewal date reads amber, anything
+  past it reads red. Six months is their procurement lead time, so that is the point at which
+  a renewal becomes actionable rather than interesting.
+* **Still to come** — every garment ordered and not handed over, longest wait first, with a
+  banner once anything passes `CHASE_AFTER_DAYS`. The tailor routinely delivers part of an
+  order and says the rest will follow, and *the rest* is what gets forgotten.
 
-Recipients get **one digest each** — five items due is one email, not five.
+An order nobody has been measured for does not appear on that list: the tailor cannot owe you
+clothes he has not taken sizes for. Those sit at **awaiting measurement** on the order log.
 
-**Idempotency**: every reminder is claimed in the ledger, keyed on
-`employee|item|due_date|stage|recipient`, *before* the message is sent. A crash or retry
-therefore causes a *missed* email (visible as pending, re-sent next run) rather than a duplicate.
-The due date is in the key, so next cycle's reminder correctly fires again.
-
-### Go-live guards
-
-Switching this on against years of history would mail the entire workforce in one morning. So:
-
-* `REMINDERS_ENABLED=false` and `REMINDERS_DRY_RUN=true` by **default** — sending is opt-in.
-* A dry run writes **nothing** to the ledger, so nightly previews cannot pile up claims that all
-  fire the moment you go live.
-* `REMINDERS_START_DATE` pre-suppresses everything due before go-live.
-* `MAX_SENDS_PER_RUN` caps the blast radius.
-* `RECIPIENT_ALLOWLIST` rewrites every address outside production.
-
-Roll out to one department for a fortnight before going company-wide.
+There is deliberately no mailer. An earlier build had one — staged reminders, an idempotent
+send ledger, allowlists and per-run caps — and it was removed rather than left switched off,
+because an application that *can* email the whole workforce is a liability when nobody asked
+it to.
 
 ## Running it
 
@@ -183,15 +184,14 @@ python scripts/make_sample_workbook.py data/big.xlsx --employees 10000
 WORKBOOK_PATH=./data/big.xlsx uvicorn app.main:app
 ```
 
-**Run a single worker.** The scheduler is in-process and the workbook has one writer; extra
-uvicorn workers would mean several schedulers. The daily run also takes a per-day lock in the
-ledger as a second line of defence.
+**Run a single worker.** The workbook has one writer, and the file-change poll is in-process;
+extra uvicorn workers would mean several of each, racing each other for the same file.
 
 ## Pages
 
 | Page | |
 |---|---|
-| `/` | Counts for never-issued, overdue, due, due-soon; workbook and reminder health |
+| `/` | Counts for never-issued, overdue, due, due-soon; workbook health |
 | `/employees` | Search and filter; outstanding count per person |
 | `/employees/{n}` | Entitlements, status, full history, and an **Issue** form with sizes prefilled |
 | `/issue` | **Bulk issue** — the same kit to a whole intake in one submit |
@@ -208,8 +208,6 @@ GET  /api/status?state=overdue|due|due_soon|never_issued|ok&department=
 GET  /api/dashboard/summary      GET /api/data-quality
 POST /api/issuances              POST /api/issuances/bulk
 GET  /api/issuances?employee=&item=
-POST /api/reminders/run?dry_run=true
-GET  /api/reminders
 POST /api/workbook/reload        POST /api/workbook/flush
 ```
 
@@ -223,7 +221,7 @@ business logic.
 python -m pytest
 ```
 
-145 tests. The due-date engine is pure and exhaustively covered (12- vs 24-month cycles,
+210 tests. The due-date engine is pure and exhaustively covered (12- vs 24-month cycles,
 never-issued, month-end clamping — `29 Feb + 12 months` is 28 Feb, which is why
 `timedelta(days=365)` is never used). The workbook tests run against a deliberately messy
 fixture — renamed and reordered columns, four date formats, blank rows, duplicate keys, junk

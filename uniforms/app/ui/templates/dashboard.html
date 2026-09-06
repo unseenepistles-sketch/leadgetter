@@ -89,16 +89,5 @@
     </form>
   </div>
 
-  <div class="panel">
-    <h2>Reminders</h2>
-    <dl class="kv">
-      {% for k, v in reminder_counts.items() %}<dt>{{ k }}</dt><dd>{{ v }}</dd>{% endfor %}
-      {% if not reminder_counts %}<dt>Sent</dt><dd>none yet</dd>{% endif %}
-      <dt>Live sending</dt><dd>{{ 'on' if live else 'off (dry run)' }}</dd>
-    </dl>
-    <form method="post" action="/reminders/run" style="margin-top:14px">
-      <button class="ghost" name="dry_run" value="1" type="submit">Preview run (sends nothing)</button>
-    </form>
-  </div>
 </div>
 {% endblock %}

@@ -26,8 +26,6 @@ async def lifespan(app: FastAPI):
     get_store().load()
     start_scheduler()
     log.info("capabilities: %s", settings.capabilities())
-    if settings.reminders_enabled and not settings.reminders_dry_run:
-        log.warning("LIVE REMINDER SENDING IS ON — real email will go to real people")
     yield
     shutdown_scheduler()
 

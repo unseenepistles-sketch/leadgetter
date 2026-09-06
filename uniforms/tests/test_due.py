@@ -159,7 +159,7 @@ def test_never_issued_is_invisible_to_the_issuance_log():
     assert by_item["SHIRT"].status is UniformStatus.OK
 
 
-# --- bad data must never produce a confident reminder ---
+# --- bad data must never produce a confident answer ---
 
 def test_missing_join_date_and_no_issuance_needs_review():
     s = compute_status(emp(join_date=None), SHIRT, ENT_SHIRT, None, date(2024, 6, 1))

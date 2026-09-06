@@ -11,7 +11,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Body, HTTPException, Query, Request
 
-from ..deps import get_ledger, get_runner, get_service, get_store
+from ..deps import get_service, get_store
 from ..domain.models import ORDER_LABELS, Employee, Issuance, ItemStatus, OrderLine, OrderStatus, OrderSummary
 from ..service import NotFound, ValidationError
 
@@ -235,7 +235,6 @@ def dashboard_summary() -> dict:
             "last_write_error": store.last_write_error,
             **store.snapshot.counts,
         },
-        "reminders": get_ledger().counts(),
         "staff_by_category": service.staff_by_category(),
         "recently_delivered": [order_json(l) for l in service.recently_delivered()],
         "partially_delivered": [
@@ -527,15 +526,8 @@ def data_quality() -> dict:
     return {"total": len(problems), "problems": problems}
 
 
-@router.post("/reminders/run")
-def run_reminders(dry_run: bool = True) -> dict:
-    return get_runner().run(dry_run=dry_run).as_dict()
 
 
-@router.get("/reminders")
-def reminder_history(employee: Optional[str] = None, limit: int = Query(200, le=1000)) -> dict:
-    rows = get_ledger().history(employee, limit)
-    return {"counts": get_ledger().counts(), "items": [dict(r) for r in rows]}
 
 
 @router.post("/workbook/reload")

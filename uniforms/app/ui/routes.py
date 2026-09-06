@@ -17,7 +17,7 @@ from fastapi.templating import Jinja2Templates
 
 from ..auth import COOKIE, User
 from ..config import get_settings
-from ..deps import get_auth, get_ledger, get_runner, get_service, get_store
+from ..deps import get_auth, get_service, get_store
 from ..domain.models import ORDER_LABELS, EmployeeStatus, OrderStatus, UniformStatus
 from ..service import NotFound, ValidationError
 
@@ -126,8 +126,6 @@ def dashboard(request: Request):
         store_path=str(store.path),
         pending_writes=store.pending_writes,
         last_write_error=store.last_write_error,
-        reminder_counts=get_ledger().counts(),
-        live=settings.sending_for_real,
         pending_delivery=service.pending_delivery(),
         open_orders=len(service.order_lines(open_only=True)),
         actions=service.action_needed(limit=8),
@@ -517,19 +515,21 @@ async def edit_order_header_submit(pr_number: str, request: Request):
     return _back(f"/orders/{pr_number}", ok=f"{pr_number} updated.")
 
 
-#: How long a promised-but-undelivered garment may sit before it needs chasing.
-CHASE_DAYS = 30
+
 
 
 @router.get("/pending")
 def pending(request: Request):
     """The chase list: what the tailor still owes, and how long it has been owed."""
     rows = get_service().outstanding_lines()
+    # Read per request, not at import: the setting is env-driven and tests and
+    # deployments both set it after this module has been imported.
+    chase_days = get_settings().chase_after_days
     return _render(
         request, "pending.html", "pending",
         rows=rows, pieces=sum(r["outstanding"] for r in rows),
-        chasing=[r for r in rows if r["waiting_days"] >= CHASE_DAYS],
-        chase_days=CHASE_DAYS,
+        chasing=[r for r in rows if r["waiting_days"] >= chase_days],
+        chase_days=chase_days,
     )
 
 
@@ -572,16 +572,6 @@ def reload_workbook():
     return _back("/", ok="Reloaded from the workbook." if changed else "Already up to date.")
 
 
-@router.post("/reminders/run")
-def run_reminders(dry_run: str = Form("1")):
-    result = get_runner().run(dry_run=dry_run == "1")
-    note = f" {'; '.join(result.notes)}" if result.notes else ""
-    return _back(
-        "/",
-        ok=f"Scanned {result.scanned}, would notify {result.sent} recipient(s)."
-           f"{note}" if result.dry_run else
-           f"Sent {result.sent} message(s), {result.failed} failed.{note}",
-    )
 
 
 @router.get("/healthz")

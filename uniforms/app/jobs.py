@@ -1,4 +1,10 @@
-"""Background jobs: the daily reminder run, and noticing hand edits to the workbook."""
+"""Background jobs.
+
+The workbook is polled for outside edits; nothing else runs on a timer. The
+reminder mailer that used to live here was removed: alerts in this system are
+visual, on the renewal and "still to come" screens, and an app that can email
+the whole workforce is a liability when nobody wants it to.
+"""
 from __future__ import annotations
 
 import logging
@@ -6,58 +12,38 @@ import logging
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from .config import get_settings
-from .deps import get_runner, get_store
+from .deps import get_store
 
 log = logging.getLogger("uniforms.jobs")
+
 _scheduler: BackgroundScheduler | None = None
 
 
-def run_reminders() -> None:
-    settings = get_settings()
-    if not settings.reminders_enabled:
-        log.info("reminders disabled (REMINDERS_ENABLED is off); skipping")
-        return
-    try:
-        # run_locked takes a per-day lock, so several workers cannot each send.
-        result = get_runner().run_locked(dry_run=settings.reminders_dry_run)
-        if result is None:
-            return
-        log.info("reminder run: %s", result.as_dict())
-    except Exception:
-        log.exception("reminder run failed")
-
-
-def reload_workbook() -> None:
-    """Pick up edits someone made in Excel directly."""
+def reload_workbook_if_changed() -> None:
+    """Notice when someone has edited the workbook in Excel."""
     try:
         if get_store().reload_if_changed():
             log.info("workbook changed on disk; reloaded")
     except Exception:
-        log.exception("workbook reload failed")
+        log.exception("workbook poll failed")
 
 
-def start_scheduler() -> None:
+def start_scheduler() -> BackgroundScheduler:
     global _scheduler
     if _scheduler is not None:
-        return
+        return _scheduler
+
     settings = get_settings()
-
-    get_store().start_writer()
-
-    _scheduler = BackgroundScheduler(daemon=True)
-    _scheduler.add_job(
-        run_reminders, "cron", hour=settings.reminder_hour, minute=0,
-        id="reminders", max_instances=1, coalesce=True, misfire_grace_time=3600,
+    scheduler = BackgroundScheduler(daemon=True)
+    scheduler.add_job(
+        reload_workbook_if_changed, "interval",
+        seconds=settings.reload_poll_seconds, id="workbook-poll",
+        max_instances=1, coalesce=True,
     )
-    _scheduler.add_job(
-        reload_workbook, "interval", seconds=settings.reload_poll_seconds,
-        id="reload_workbook", max_instances=1, coalesce=True,
-    )
-    _scheduler.start()
-    log.info(
-        "scheduler started (reminders at %02d:00, enabled=%s, dry_run=%s)",
-        settings.reminder_hour, settings.reminders_enabled, settings.reminders_dry_run,
-    )
+    scheduler.start()
+    _scheduler = scheduler
+    log.info("scheduler started (workbook poll every %ss)", settings.reload_poll_seconds)
+    return scheduler
 
 
 def shutdown_scheduler() -> None:
@@ -65,5 +51,3 @@ def shutdown_scheduler() -> None:
     if _scheduler is not None:
         _scheduler.shutdown(wait=False)
         _scheduler = None
-    # Drain anything still queued so a restart never loses a recorded handover.
-    get_store().stop_writer()

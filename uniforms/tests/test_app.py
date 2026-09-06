@@ -13,13 +13,12 @@ def client(tmp_path, monkeypatch):
     workbook = clean_workbook(tmp_path / "uniforms.xlsx")
     monkeypatch.setenv("WORKBOOK_PATH", str(workbook))
     monkeypatch.setenv("BACKUP_DIR", str(tmp_path / "bak"))
-    monkeypatch.setenv("LEDGER_PATH", str(tmp_path / "ledger.sqlite3"))
     monkeypatch.setenv("STORES_EMAIL", "stores@co.test")
     monkeypatch.setenv("REMINDERS_ENABLED", "0")
 
     from app import config, deps
 
-    for cached in (config.get_settings, deps.get_store, deps.get_service, deps.get_ledger):
+    for cached in (config.get_settings, deps.get_store, deps.get_service):
         cached.cache_clear()
 
     from app.main import app
@@ -27,7 +26,7 @@ def client(tmp_path, monkeypatch):
     with TestClient(app) as c:
         yield c
 
-    for cached in (config.get_settings, deps.get_store, deps.get_service, deps.get_ledger):
+    for cached in (config.get_settings, deps.get_store, deps.get_service):
         cached.cache_clear()
 
 
@@ -179,32 +178,16 @@ def test_issue_form_with_no_items_reports_the_error(client):
     assert "err=" in response.headers["location"]
 
 
-# --- reminders through the API ---
-
-def test_reminder_dry_run_changes_nothing(client):
-    body = client.post("/api/reminders/run?dry_run=true").json()
-    assert body["dry_run"] and body["scanned"] > 0
-    assert client.get("/api/reminders").json()["counts"] == {}
-
-
-def test_reminder_live_run_then_repeat_is_silent(client):
-    first = client.post("/api/reminders/run?dry_run=false").json()
-    assert first["sent"] > 0
-    second = client.post("/api/reminders/run?dry_run=false").json()
-    assert second["sent"] == 0
-
-
 # --- data quality surfaces a messy workbook ---
 
 def test_data_quality_reports_problem_rows(tmp_path, monkeypatch):
     workbook = messy_workbook(tmp_path / "messy.xlsx")
     monkeypatch.setenv("WORKBOOK_PATH", str(workbook))
     monkeypatch.setenv("BACKUP_DIR", str(tmp_path / "bak"))
-    monkeypatch.setenv("LEDGER_PATH", str(tmp_path / "l.sqlite3"))
 
     from app import config, deps
 
-    for cached in (config.get_settings, deps.get_store, deps.get_service, deps.get_ledger):
+    for cached in (config.get_settings, deps.get_store, deps.get_service):
         cached.cache_clear()
     from app.main import app
 
@@ -213,7 +196,7 @@ def test_data_quality_reports_problem_rows(tmp_path, monkeypatch):
         assert body["total"] > 0
         assert client.get("/data-quality").status_code == 200
 
-    for cached in (config.get_settings, deps.get_store, deps.get_service, deps.get_ledger):
+    for cached in (config.get_settings, deps.get_store, deps.get_service):
         cached.cache_clear()
 
 
@@ -338,7 +321,6 @@ def secure_client(tmp_path, monkeypatch):
     workbook = clean_workbook(tmp_path / "uniforms.xlsx")
     monkeypatch.setenv("WORKBOOK_PATH", str(workbook))
     monkeypatch.setenv("BACKUP_DIR", str(tmp_path / "bak"))
-    monkeypatch.setenv("LEDGER_PATH", str(tmp_path / "ledger.sqlite3"))
     monkeypatch.setenv("REMINDERS_ENABLED", "0")
     monkeypatch.setenv("AUTH_ENABLED", "1")
     monkeypatch.setenv("SECRET_KEY", "test-key")
@@ -350,7 +332,7 @@ def secure_client(tmp_path, monkeypatch):
     from app import config, deps
 
     caches = (config.get_settings, deps.get_store, deps.get_service,
-              deps.get_ledger, deps.get_auth)
+              deps.get_auth)
     for c in caches:
         c.cache_clear()
     from app.main import app
