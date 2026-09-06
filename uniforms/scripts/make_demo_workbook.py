@@ -214,42 +214,46 @@ def build(path: Path, *, count: int = 48, today: date | None = None, seed: int =
     _style(ws, [17, 12, 13, 10, 9, 14, 14, 20])
 
     # ------------------------------------------------------------------- orders
-    # Open orders in various states of arrival, so the log shows the real spread:
-    # nothing yet, part-shipped, and complete.
+    # Real orders are bulk ones: one PR number covering many people and many
+    # items, moving through raised -> measured -> part-delivered -> delivered.
     ws = wb.create_sheet("Orders")
-    ws.append(["Order ID", "Employee Number", "Item Code", "Ordered Date", "Quantity",
-               "Supplier Ref", "Cancelled", "Notes"])
+    ws.append(["PR Number", "Employee Number", "Item Code", "Ordered Date", "Quantity",
+               "Size", "Measured Date", "Tailor", "Cancelled", "Notes"])
     deliveries: list[list] = []
     active = [p for p in people if p["status"] == "Active" and p["joined"]]
+    tailors = ["Al Noor Tailors", "Crown Uniforms", "Bespoke Workwear"]
     orders = 0
-    for n, p in enumerate(rng.sample(active, k=min(14, len(active)))):
-        entitled = ENTITLEMENTS[p["role"]]
-        code, qty = entitled[n % len(entitled)]
-        qty = max(1, qty)
-        ordered_on = today - timedelta(days=rng.randint(3, 70))
-        orders += 1
-        order_id = f"ORD-{ordered_on:%Y%m%d}-{orders:03d}"
-        ws.append([order_id, p["number"], code, ordered_on, qty,
-                   f"PO-{4200 + orders}", None, ""])
 
-        # A third arrive complete, a third part-shipped, a third not yet.
-        bucket = n % 3
-        if bucket == 0:
-            got = qty
-        elif bucket == 1:
-            got = max(1, qty // 2) if qty > 1 else 0
-        else:
-            got = 0
-        if got:
-            arrived = ordered_on + timedelta(days=rng.randint(2, 25))
-            if arrived > today:
-                arrived = today
-            deliveries.append([
-                p["number"], code, arrived, got,
-                p[size_keys[code]] if size_keys.get(code) else None,
-                rng.choice(issuers), cycles[code], order_id, "",
-            ])
-    _style(ws, [20, 17, 12, 13, 10, 14, 11, 20])
+    # Four PRs at the four stages of the journey, so the log shows the spread.
+    for n, (days_ago, stage) in enumerate(
+        [(96, "delivered"), (61, "partial"), (28, "awaiting"), (9, "measuring")], start=1
+    ):
+        raised = today - timedelta(days=days_ago)
+        measured = None if stage == "measuring" else raised + timedelta(days=rng.randint(6, 16))
+        pr = f"PR-{raised:%Y}-{1070 + n * 13}"
+        tailor = rng.choice(tailors)
+        orders += 1
+
+        for p in rng.sample(active, k=min(rng.randint(6, 12), len(active))):
+            for code, qty in ENTITLEMENTS[p["role"]][: rng.randint(2, 4)]:
+                qty = max(1, qty)
+                ws.append([pr, p["number"], code, raised, qty,
+                           p[size_keys[code]] if size_keys.get(code) else None,
+                           measured, tailor, None, ""])
+                if stage == "measuring" or stage == "awaiting":
+                    continue
+                # Partly delivered orders leave roughly a third still to come.
+                got = qty if stage == "delivered" or rng.random() > 0.35 else 0
+                if not got:
+                    continue
+                arrived = min(today, measured + timedelta(days=rng.randint(12, 34)))
+                deliveries.append([
+                    p["number"], code, arrived, got,
+                    p[size_keys[code]] if size_keys.get(code) else None,
+                    rng.choice(issuers), cycles[code], pr, "",
+                ])
+
+    _style(ws, [16, 17, 12, 13, 10, 9, 14, 20, 11, 20])
 
     # Deliveries are ordinary issuance rows carrying the order they fulfil, so the
     # renewal clock runs from arrival and "1/2 delivered" is always computed.
@@ -264,7 +268,7 @@ def build(path: Path, *, count: int = 48, today: date | None = None, seed: int =
     wb.save(path)
     wb.close()
     print(f"wrote {path}: {len(people)} employees, {len(ITEMS)} items, "
-          f"{rows} issuance rows, {orders} orders")
+          f"{rows} issuance rows, {orders} orders ({ws.max_row - 1} lines)")
     return path
 
 

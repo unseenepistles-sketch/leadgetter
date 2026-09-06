@@ -56,6 +56,8 @@
   .flash.ok { background:var(--ok-bg); color:var(--ok); }
   .flash.err { background:var(--over-bg); color:var(--over); }
   .muted { color:var(--muted); }
+  .o-awaiting_measurement{color:var(--never);background:var(--never-bg)}
+  .o-pending{color:var(--due);background:var(--due-bg)}
   .o-awaiting_delivery{color:var(--due);background:var(--due-bg)}
   .o-partially_delivered{color:var(--accent);background:#e8effa}
   .o-delivered{color:var(--ok);background:var(--ok-bg)}
@@ -80,6 +82,28 @@
   .step:first-child { border-radius:7px 0 0 7px; }
   .step:last-child { border-radius:0 7px 7px 0; }
   .step:hover { background:var(--bg); border-color:var(--accent); color:var(--accent); }
+
+  /* an order's journey: raised -> measured -> delivered */
+  .track { display:flex; flex-wrap:wrap; margin-bottom:18px; }
+  .leg { flex:1; min-width:150px; padding:10px 13px; border:1px solid var(--line);
+         border-right:0; background:var(--panel); }
+  .leg:first-child { border-radius:9px 0 0 9px; }
+  .leg:last-child { border-right:1px solid var(--line); border-radius:0 9px 9px 0; }
+  .leg.done { background:#f5f8fd; border-color:var(--accent); }
+  .leg .k { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+            color:var(--muted); font-weight:650; }
+  .leg .v { font-size:14px; margin-top:3px; }
+
+  /* one block per person inside a bulk order */
+  tr.grp td { background:var(--bg); border-top:1px solid var(--line); }
+  .people { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+            gap:6px; max-height:300px; overflow:auto; padding:3px; }
+  .people label { display:flex; gap:8px; align-items:center; font-size:14px; padding:8px 10px;
+                  border:1px solid var(--line); border-radius:8px; background:#fff;
+                  cursor:pointer; font-weight:400; }
+  .people input { accent-color:var(--accent); margin:0; }
+  button.linkish { background:none; border:0; padding:0; font:inherit; font-size:13px;
+                   color:var(--accent); cursor:pointer; text-decoration:underline; }
 
   /* prioritised action list */
   .actions { display:flex; flex-direction:column; }

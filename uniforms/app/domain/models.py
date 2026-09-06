@@ -18,8 +18,16 @@ class EmployeeStatus(str, Enum):
 
 
 class OrderStatus(str, Enum):
-    """Where an order stands between being placed and reaching the person."""
+    """Where an order stands between being raised and reaching the person.
 
+    The real sequence is: she raises an order against a PR number, the tailor
+    visits to take measurements, and the tailor returns with the clothes —
+    sometimes all of them, sometimes some now and the rest later. Measurement is
+    a distinct stage because an order can sit there for weeks, and "the tailor
+    has not been yet" is a different problem from "the tailor has not delivered".
+    """
+
+    AWAITING_MEASUREMENT = "awaiting_measurement"
     PENDING = "pending"
     PARTIAL = "partially_delivered"
     DELIVERED = "delivered"
@@ -27,7 +35,8 @@ class OrderStatus(str, Enum):
 
 
 ORDER_LABELS = {
-    OrderStatus.PENDING: "Pending",
+    OrderStatus.AWAITING_MEASUREMENT: "Awaiting measurement",
+    OrderStatus.PENDING: "Awaiting delivery",
     OrderStatus.PARTIAL: "Partially delivered",
     OrderStatus.DELIVERED: "Delivered",
     OrderStatus.CANCELLED: "Cancelled",
@@ -154,10 +163,19 @@ class Order:
     item_code: str
     ordered_date: date
     quantity: int = 1
+    size: Optional[str] = None
+    #: The day the tailor came to take measurements. Order-level, so it is the
+    #: same on every row of a PR; nothing is delivered before it is set.
+    measured_date: Optional[date] = None
     supplier_ref: Optional[str] = None
     notes: Optional[str] = None
     cancelled: bool = False
     row: Optional[int] = None
+
+    @property
+    def pr_number(self) -> str:
+        """What she calls it. The PR number *is* the order id."""
+        return self.order_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,14 +197,78 @@ class OrderLine:
 
     @property
     def is_open(self) -> bool:
-        return self.status in (OrderStatus.PENDING, OrderStatus.PARTIAL)
+        return self.status in (
+            OrderStatus.AWAITING_MEASUREMENT,
+            OrderStatus.PENDING,
+            OrderStatus.PARTIAL,
+        )
 
 
-def order_status(quantity: int, delivered: int, cancelled: bool = False) -> OrderStatus:
+@dataclass(frozen=True, slots=True)
+class OrderSummary:
+    """A whole PR rolled up: what was asked for, what has arrived, where it is.
+
+    She works at this level — one PR number, one tailor, one measurement visit —
+    while the individual lines are what actually get delivered and tracked.
+    """
+
+    pr_number: str
+    raised: date
+    measured: Optional[date]
+    tailor: Optional[str]
+    notes: Optional[str]
+    lines: tuple["OrderLine", ...]
+    status: OrderStatus
+
+    @property
+    def ordered(self) -> int:
+        return sum(l.order.quantity for l in self.lines)
+
+    @property
+    def delivered(self) -> int:
+        return sum(l.delivered for l in self.lines)
+
+    @property
+    def outstanding(self) -> int:
+        return max(0, self.ordered - self.delivered)
+
+    @property
+    def people(self) -> int:
+        return len({l.order.employee_number for l in self.lines})
+
+    @property
+    def first_delivery(self) -> Optional[date]:
+        dates = [l.last_delivery for l in self.lines if l.last_delivery]
+        return min(dates) if dates else None
+
+    @property
+    def last_delivery(self) -> Optional[date]:
+        dates = [l.last_delivery for l in self.lines if l.last_delivery]
+        return max(dates) if dates else None
+
+    @property
+    def is_open(self) -> bool:
+        return self.status not in (OrderStatus.DELIVERED, OrderStatus.CANCELLED)
+
+
+def order_status(
+    quantity: int,
+    delivered: int,
+    cancelled: bool = False,
+    measured: bool = True,
+) -> OrderStatus:
+    """Where this line stands.
+
+    ``measured`` defaults to True so that a workbook with no measurement column —
+    an older one, or one where she has not filled it in — behaves exactly as it
+    did before rather than showing every order stuck at the measuring stage.
+    A delivery always wins over a missing measurement date: if the clothes are
+    here, the tailor plainly came, whatever the sheet says.
+    """
     if cancelled:
         return OrderStatus.CANCELLED
     if delivered <= 0:
-        return OrderStatus.PENDING
+        return OrderStatus.AWAITING_MEASUREMENT if not measured else OrderStatus.PENDING
     if delivered < quantity:
         return OrderStatus.PARTIAL
     return OrderStatus.DELIVERED

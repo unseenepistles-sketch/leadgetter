@@ -21,6 +21,7 @@ from .domain.models import (
     Order,
     OrderLine,
     OrderStatus,
+    OrderSummary,
     RenewalOverride,
     UniformStatus,
     order_status,
@@ -305,11 +306,39 @@ class UniformService:
         rows.sort(key=lambda r: (r.order.ordered_date, r.employee_name), reverse=True)
         return rows
 
-    def order_line(self, order_id: str) -> OrderLine:
-        order = self.snapshot.orders.get(order_id)
+    def order_line(self, pr_number: str, employee_number: str, item_code: str) -> OrderLine:
+        """One line of one order. A PR alone does not identify a line — the same
+        PR number covers every person on the bulk order."""
+        order = self.snapshot.orders.get((pr_number, employee_number, item_code))
         if order is None:
-            raise NotFound(f"no order {order_id!r}")
+            raise NotFound(f"no line for {item_code} / {employee_number} on {pr_number}")
         return _order_line(self, order)
+
+    def order(self, pr_number: str) -> "OrderSummary":
+        """A whole PR: its lines, its dates and where it has got to."""
+        lines = [
+            _order_line(self, o)
+            for o in self.snapshot.orders.values()
+            if o.order_id == pr_number
+        ]
+        if not lines:
+            raise NotFound(f"no order {pr_number!r}")
+        return _summarise(pr_number, lines)
+
+    def orders(self, *, status: Optional[str] = None) -> list["OrderSummary"]:
+        """Every PR, newest first — the order log as she thinks of it."""
+        grouped: dict[str, list[OrderLine]] = {}
+        for order in self.snapshot.orders.values():
+            grouped.setdefault(order.order_id, []).append(_order_line(self, order))
+        rows = [_summarise(pr, lines) for pr, lines in grouped.items()]
+        if status and status != "all":
+            try:
+                wanted = OrderStatus(status)
+            except ValueError as exc:
+                raise ValidationError(f"unknown order status {status!r}") from exc
+            rows = [r for r in rows if r.status is wanted]
+        rows.sort(key=lambda r: (r.raised, r.pr_number), reverse=True)
+        return rows
 
     def pending_delivery(self) -> int:
         """Pieces ordered that have not arrived — her 'items pending delivery'."""
@@ -317,48 +346,109 @@ class UniformService:
 
     def place_order(
         self,
-        employee_number: str,
-        quantities: dict[str, int],
+        pr_number: str,
+        lines: Sequence[dict],
         *,
         ordered_date: Optional[date] = None,
-        supplier_ref: Optional[str] = None,
+        tailor: Optional[str] = None,
         notes: Optional[str] = None,
-    ) -> list[Order]:
-        """Order several items for one person in one go — 6 shirts and 3 trousers.
+    ) -> "OrderSummary":
+        """Raise one order against one PR number.
 
-        One row per item type, so each can be delivered and tracked separately;
-        a supplier rarely ships the whole order at once.
+        A real order is a bulk one — thirty-five people, a hundred and sixty-eight
+        lines, one PR number on the paperwork. Each ``line`` is
+        ``{"employee_number", "item_code", "quantity", "size"}``. Nothing is
+        measured or delivered yet; those are separate events that follow.
         """
-        self.employee(employee_number)
-        wanted = {code: int(qty) for code, qty in quantities.items() if int(qty or 0) > 0}
-        if not wanted:
-            raise ValidationError("set a quantity of at least 1 for one item")
+        pr = (pr_number or "").strip()
+        if not pr:
+            raise ValidationError("a PR number is required")
+        if any(o.order_id == pr for o in self.snapshot.orders.values()):
+            raise ValidationError(f"{pr} has already been used for another order")
 
         when = ordered_date or date.today()
+        if when > date.today():
+            raise ValidationError("the order date cannot be in the future")
+
         created: list[Order] = []
-        existing = set(self.snapshot.orders)
-        for code, qty in wanted.items():
+        seen: set[tuple[str, str]] = set()
+        for raw in lines:
+            emp_no = str(raw.get("employee_number") or "").strip()
+            code = str(raw.get("item_code") or "").strip()
+            qty = int(raw.get("quantity") or 0)
+            if qty <= 0:
+                continue
+            self.employee(emp_no)
             if code not in self.snapshot.items:
                 raise ValidationError(f"unknown item code {code!r}")
-            order_id = _next_order_id(when, existing)
-            existing.add(order_id)
+            if (emp_no, code) in seen:
+                raise ValidationError(
+                    f"{emp_no} appears twice for {code} on this order — combine them"
+                )
+            seen.add((emp_no, code))
             created.append(
                 Order(
-                    order_id=order_id,
-                    employee_number=employee_number,
+                    order_id=pr,
+                    employee_number=emp_no,
                     item_code=code,
                     ordered_date=when,
                     quantity=qty,
-                    supplier_ref=supplier_ref,
+                    size=(str(raw.get("size")).strip() or None) if raw.get("size") else None,
+                    supplier_ref=tailor,
                     notes=notes,
                 )
             )
+        if not created:
+            raise ValidationError("an order needs at least one item with a quantity")
+
         self.store.append_orders(created)
-        return created
+        for order in created:
+            self.snapshot.orders[(pr, order.employee_number, order.item_code)] = order
+        return self.order(pr)
+
+    def record_measurement(
+        self,
+        pr_number: str,
+        measured_date: Optional[date] = None,
+        *,
+        who: Optional[str] = None,
+    ) -> "OrderSummary":
+        """The day the tailor came to take sizes. One visit covers the whole PR."""
+        summary = self.order(pr_number)
+        when = measured_date or date.today()
+        if when > date.today():
+            raise ValidationError("the measurement date cannot be in the future")
+        if when < summary.raised:
+            raise ValidationError(
+                f"the tailor cannot have measured before the order was raised "
+                f"({summary.raised:%d %b %Y})"
+            )
+
+        for line in summary.lines:
+            order = line.order
+            if order.measured_date == when:
+                continue
+            key = {
+                "order_id": pr_number,
+                "employee_number": order.employee_number,
+                "item_code": order.item_code,
+            }
+            self.store.update_by_key(ORDERS_SHEET, key, {"measured_date": when})
+            self.snapshot.orders[(pr_number, order.employee_number, order.item_code)] = (
+                replace(order, measured_date=when)
+            )
+            self._log(
+                who, "order", f"{pr_number}/{order.employee_number}/{order.item_code}",
+                {"measured_date": (order.measured_date, when)},
+                "tailor measurement visit",
+            )
+        return self.order(pr_number)
 
     def receive_delivery(
         self,
-        order_id: str,
+        pr_number: str,
+        employee_number: str,
+        item_code: str,
         *,
         quantity: Optional[int] = None,
         received_date: Optional[date] = None,
@@ -366,13 +456,16 @@ class UniformService:
         received_by: Optional[str] = None,
         notes: Optional[str] = None,
     ) -> Issuance:
-        """Book in what actually arrived. This is the handover, and it starts the
-        renewal clock — the cycle runs from when the person has the garment."""
-        line = self.order_line(order_id)
+        """Book in what the tailor actually brought for one person and one item.
+
+        This is the handover, and it starts the renewal clock — the cycle runs
+        from when the person has the garment, not from when it was ordered.
+        """
+        line = self.order_line(pr_number, employee_number, item_code)
         if line.order.cancelled:
             raise ValidationError("that order was cancelled")
         if line.pending <= 0:
-            raise ValidationError("that order is already fully delivered")
+            raise ValidationError("that line is already fully delivered")
 
         qty = quantity if quantity is not None else line.pending
         if qty < 1:
@@ -385,6 +478,11 @@ class UniformService:
         when = received_date or date.today()
         if when > date.today():
             raise ValidationError("delivery date cannot be in the future")
+        if when < line.order.ordered_date:
+            raise ValidationError(
+                f"the tailor cannot have delivered before the order was raised "
+                f"({line.order.ordered_date:%d %b %Y})"
+            )
 
         emp = self.employee(line.order.employee_number)
         item = self.snapshot.items[line.order.item_code]
@@ -393,14 +491,63 @@ class UniformService:
             item_code=item.item_code,
             issued_date=when,
             quantity=qty,
-            size=size or (item.size_key and emp.sizes.get(item.size_key)) or None,
+            size=size
+            or line.order.size
+            or (item.size_key and emp.sizes.get(item.size_key))
+            or None,
             issued_by=received_by,
             cycle_months=item.renewal_cycle_months,
-            order_id=order_id,
+            order_id=pr_number,
             notes=notes,
         )
         self.store.append_issuance(issuance)
         return issuance
+
+    def receive_deliveries(
+        self,
+        pr_number: str,
+        parts: Sequence[dict],
+        *,
+        received_date: Optional[date] = None,
+        received_by: Optional[str] = None,
+        notes: Optional[str] = None,
+    ) -> list[Issuance]:
+        """One visit from the tailor, many garments booked in.
+
+        The tailor arrives with a van, not with one shirt, so this is the normal
+        case. Every part is validated before any of it is written — a bad line
+        should not leave half a delivery recorded.
+        """
+        summary = self.order(pr_number)
+        if summary.measured is None:
+            raise ValidationError(
+                "record the tailor's measurement visit before booking in a delivery"
+            )
+
+        when = received_date or date.today()
+        planned: list[tuple[str, str, int]] = []
+        for raw in parts:
+            emp_no = str(raw.get("employee_number") or "").strip()
+            code = str(raw.get("item_code") or "").strip()
+            qty = int(raw.get("quantity") or 0)
+            if qty <= 0:
+                continue
+            line = self.order_line(pr_number, emp_no, code)
+            if qty > line.pending:
+                raise ValidationError(
+                    f"{line.employee_name} / {line.item_name}: only {line.pending} outstanding"
+                )
+            planned.append((emp_no, code, qty))
+        if not planned:
+            raise ValidationError("nothing was marked as delivered")
+
+        return [
+            self.receive_delivery(
+                pr_number, emp_no, code, quantity=qty, received_date=when,
+                received_by=received_by, notes=notes,
+            )
+            for emp_no, code, qty in planned
+        ]
 
     def action_needed(self, today: Optional[date] = None, limit: int = 12) -> list[dict]:
         """One prioritised list: overdue, then upcoming renewals, then undelivered.
@@ -525,16 +672,16 @@ class UniformService:
         self._log(who, "employee", employee_number, changed, reason)
         return updated
 
-    def edit_order(self, order_id: str, fields: dict,
+    def edit_order(self, pr_number: str, employee_number: str, item_code: str, fields: dict,
                    *, who: str = "", reason: Optional[str] = None) -> OrderLine:
         """Edit an order: quantity, requested date, supplier reference, remarks.
 
         Reducing the quantity below what has already arrived is refused — the
         delivered figure is derived from real handovers and cannot be contradicted.
         """
-        line = self.order_line(order_id)
+        line = self.order_line(pr_number, employee_number, item_code)
         order = line.order
-        allowed = {"quantity", "ordered_date", "supplier_ref", "notes", "cancelled"}
+        allowed = {"quantity", "ordered_date", "supplier_ref", "size", "notes", "cancelled"}
         unknown = set(fields) - allowed
         if unknown:
             raise ValidationError(f"cannot edit {', '.join(sorted(unknown))}")
@@ -571,10 +718,12 @@ class UniformService:
         if not changed:
             return line
 
-        self.snapshot.orders[order_id] = updated
-        self.store.update_by_key(ORDERS_SHEET, {"order_id": order_id}, cells)
-        self._log(who, "order", order_id, changed, reason)
-        return self.order_line(order_id)
+        key = {"order_id": pr_number, "employee_number": employee_number,
+               "item_code": item_code}
+        self.snapshot.orders[(pr_number, employee_number, item_code)] = updated
+        self.store.update_by_key(ORDERS_SHEET, key, cells)
+        self._log(who, "order", f"{pr_number}/{employee_number}/{item_code}", changed, reason)
+        return self.order_line(pr_number, employee_number, item_code)
 
     def edit_delivery(self, employee_number: str, row: int, fields: dict,
                       *, who: str = "", reason: Optional[str] = None) -> Issuance:
@@ -812,10 +961,12 @@ def _order_line(service: "UniformService", order: Order) -> OrderLine:
     snap = service.snapshot
     emp = snap.employees.get(order.employee_number)
     item = snap.items.get(order.item_code)
-    delivered = snap.delivered_against(order.order_id)
+    delivered = snap.delivered_against(order.order_id, order.employee_number, order.item_code)
 
     deliveries = [
-        i for rows in snap.issuances.values() for i in rows if i.order_id == order.order_id
+        i
+        for i in snap.issuances.get(order.employee_number, ())
+        if i.order_id == order.order_id and i.item_code == order.item_code
     ]
     last = max((i.issued_date for i in deliveries), default=None)
     cycle = next((i.cycle_months for i in deliveries if i.cycle_months), None) or (
@@ -827,7 +978,36 @@ def _order_line(service: "UniformService", order: Order) -> OrderLine:
         role=emp.role if emp else None,
         item_name=item.name if item else order.item_code,
         delivered=delivered,
-        status=order_status(order.quantity, delivered, order.cancelled),
+        status=order_status(
+            order.quantity, delivered, order.cancelled,
+            measured=order.measured_date is not None,
+        ),
         last_delivery=last,
         next_due=add_months(last, cycle) if last and cycle else None,
+    )
+
+
+def _summarise(pr_number: str, lines: list[OrderLine]) -> OrderSummary:
+    """Roll a PR's lines up to the order she actually thinks about.
+
+    The order's status is computed from its *totals*, by the same rule a single
+    line uses. Taking the least-advanced line instead would read "awaiting
+    delivery" for an order the tailor has already part-delivered, which is both
+    wrong and the opposite of reassuring.
+    """
+    lines.sort(key=lambda l: (l.employee_name, l.item_name))
+    live = [l for l in lines if not l.order.cancelled]
+    ordered = sum(l.order.quantity for l in live)
+    delivered = sum(l.delivered for l in live)
+    measured = next((l.order.measured_date for l in lines if l.order.measured_date), None)
+    return OrderSummary(
+        pr_number=pr_number,
+        raised=min(l.order.ordered_date for l in lines),
+        measured=measured,
+        tailor=next((l.order.supplier_ref for l in lines if l.order.supplier_ref), None),
+        notes=next((l.order.notes for l in lines if l.order.notes), None),
+        lines=tuple(lines),
+        status=order_status(
+            ordered, delivered, cancelled=not live, measured=measured is not None
+        ),
     )

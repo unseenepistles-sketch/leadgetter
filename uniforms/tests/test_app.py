@@ -227,40 +227,81 @@ def test_order_pages_render(client):
 def test_place_an_order_through_the_form(client):
     response = client.post(
         "/orders",
-        data={"employee_number": "E002", "qty_SHIRT": "6", "qty_TROUSER": "3",
-              "qty_BLAZER": "0", "supplier_ref": "PO-1"},
+        data={"pr_number": "PR-2026-1077", "employee_number": ["E002", "E003"],
+              "qty_SHIRT": "6", "qty_TROUSER": "3", "qty_BLAZER": "0",
+              "tailor": "Al Noor Tailors"},
         follow_redirects=False,
     )
     assert response.status_code == 303 and "ok=" in response.headers["location"]
 
-    body = client.get("/api/orders?employee=E002").json()
-    assert body["total"] == 2
-    assert {i["quantity"] for i in body["items"]} == {6, 3}
-    assert body["pending_pieces"] == 9
+    body = client.get("/api/orders").json()
+    assert body["total"] == 1
+    order = body["items"][0]
+    assert order["pr_number"] == "PR-2026-1077"
+    assert order["people"] == 2 and order["ordered"] == 18
+    assert order["status"] == "awaiting_measurement"
+    assert body["pending_pieces"] == 18
+
+
+def test_the_order_form_demands_a_pr_number(client):
+    response = client.post(
+        "/orders",
+        data={"employee_number": "E002", "qty_SHIRT": "2"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303 and "PR+number" in response.headers["location"]
 
 
 def test_order_form_without_a_staff_member_is_rejected(client):
-    response = client.post("/orders", data={"qty_SHIRT": "2"}, follow_redirects=False)
+    response = client.post("/orders", data={"pr_number": "PR-1", "qty_SHIRT": "2"},
+                           follow_redirects=False)
     assert "err=" in response.headers["location"]
 
 
-def test_receiving_part_of_an_order_from_the_log(client):
-    client.post("/api/orders", json={"employee_number": "E002", "quantities": {"SHIRT": 4}})
-    order_id = client.get("/api/orders?employee=E002").json()["items"][0]["order_id"]
+def test_recording_the_measurement_visit_over_the_api(client):
+    client.post("/api/orders", json={
+        "pr_number": "PR-1",
+        "lines": [{"employee_number": "E002", "item_code": "SHIRT", "quantity": 4}]})
+    assert client.get("/api/orders/PR-1").json()["status"] == "awaiting_measurement"
 
-    response = client.post(f"/orders/{order_id}/deliver", data={"quantity": "1"},
+    body = client.post("/api/orders/PR-1/measurement", json={}).json()
+    assert body["measured"] is not None
+    assert body["status"] == "pending"
+
+
+def test_receiving_part_of_an_order_from_the_log(client):
+    client.post("/api/orders", json={
+        "pr_number": "PR-1",
+        "lines": [{"employee_number": "E002", "item_code": "SHIRT", "quantity": 4}]})
+    client.post("/api/orders/PR-1/measurement", json={})
+
+    response = client.post("/orders/PR-1/E002/SHIRT/deliver", data={"quantity": "1"},
                            follow_redirects=False)
     assert response.status_code == 303 and "ok=" in response.headers["location"]
 
-    line = client.get(f"/api/orders/{order_id}").json()
-    assert line["status"] == "partially_delivered"
-    assert (line["delivered"], line["pending"]) == (1, 3)
+    order = client.get("/api/orders/PR-1").json()
+    assert order["status"] == "partially_delivered"
+    assert (order["delivered"], order["outstanding"]) == (1, 3)
+
+
+def test_a_delivery_before_the_measurement_is_refused(client):
+    """The tailor cannot deliver clothes nobody has been measured for."""
+    client.post("/api/orders", json={
+        "pr_number": "PR-1",
+        "lines": [{"employee_number": "E002", "item_code": "SHIRT", "quantity": 2}]})
+    response = client.post("/api/orders/PR-1/deliveries", json={
+        "parts": [{"employee_number": "E002", "item_code": "SHIRT", "quantity": 2}]})
+    assert response.status_code == 400
+    assert "measurement" in response.json()["detail"]
 
 
 def test_delivery_shows_up_on_the_employees_record(client):
-    client.post("/api/orders", json={"employee_number": "E002", "quantities": {"SHIRT": 1}})
-    order_id = client.get("/api/orders?employee=E002").json()["items"][0]["order_id"]
-    client.post(f"/api/orders/{order_id}/deliveries", json={})
+    client.post("/api/orders", json={
+        "pr_number": "PR-1",
+        "lines": [{"employee_number": "E002", "item_code": "SHIRT", "quantity": 1}]})
+    client.post("/api/orders/PR-1/measurement", json={})
+    client.post("/api/orders/PR-1/deliveries", json={
+        "parts": [{"employee_number": "E002", "item_code": "SHIRT", "quantity": 1}]})
 
     statuses = {i["item_code"]: i["status"]
                 for i in client.get("/api/employees/E002/uniforms").json()["items"]}
@@ -268,7 +309,9 @@ def test_delivery_shows_up_on_the_employees_record(client):
 
 
 def test_action_needed_endpoint_ranks_renewals_above_orders(client):
-    client.post("/api/orders", json={"employee_number": "E002", "quantities": {"SHIRT": 2}})
+    client.post("/api/orders", json={
+        "pr_number": "PR-1",
+        "lines": [{"employee_number": "E002", "item_code": "SHIRT", "quantity": 2}]})
     rows = client.get("/api/action-needed").json()["items"]
     kinds = [r["kind"] for r in rows]
     if "order" in kinds and "renewal" in kinds:
@@ -276,7 +319,9 @@ def test_action_needed_endpoint_ranks_renewals_above_orders(client):
 
 
 def test_dashboard_shows_pending_delivery(client):
-    client.post("/api/orders", json={"employee_number": "E002", "quantities": {"SHIRT": 5}})
+    client.post("/api/orders", json={
+        "pr_number": "PR-1",
+        "lines": [{"employee_number": "E002", "item_code": "SHIRT", "quantity": 5}]})
     counts = client.get("/api/dashboard/summary").json()["counts"]
     assert counts["pending_delivery"] == 5
     assert counts["open_orders"] == 1

@@ -16,4 +16,11 @@
   {% else %}<span class="muted">&mdash;</span>{% endif %}
 {% endmacro %}
 
-{% macro order_pill(s) %}<span class="pill o-{{ s }}">{{ s.replace('_',' ') }}</span>{% endmacro %}
+{% set ORDER_TEXT = {
+  'awaiting_measurement': 'Awaiting measurement',
+  'pending': 'Awaiting delivery',
+  'partially_delivered': 'Partially delivered',
+  'delivered': 'Delivered',
+  'cancelled': 'Cancelled',
+} %}
+{% macro order_pill(s) %}<span class="pill o-{{ s }}">{{ ORDER_TEXT.get(s, s.replace('_',' ')) }}</span>{% endmacro %}

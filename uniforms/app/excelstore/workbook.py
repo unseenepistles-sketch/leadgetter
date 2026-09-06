@@ -112,7 +112,10 @@ class Snapshot:
     items: dict[str, UniformItem] = field(default_factory=dict)
     entitlements: dict[str, list[Entitlement]] = field(default_factory=dict)
     issuances: dict[str, list[Issuance]] = field(default_factory=dict)
-    orders: dict[str, Order] = field(default_factory=dict)
+    #: Keyed by (PR number, employee, item). One PR covers a whole bulk order —
+    #: 35 people and 168 lines is a normal one — so the PR number alone is not a
+    #: unique key and never was; treating it as one silently dropped rows.
+    orders: dict[tuple[str, str, str], Order] = field(default_factory=dict)
     overrides: dict[tuple[str, str], RenewalOverride] = field(default_factory=dict)
     problems: list[SheetProblem] = field(default_factory=list)
     loaded_at: Optional[datetime] = None
@@ -130,17 +133,30 @@ class Snapshot:
     def orders_for(self, employee_number: str) -> list[Order]:
         return [o for o in self.orders.values() if o.employee_number == employee_number]
 
-    def delivered_against(self, order_id: str) -> int:
-        """How much of an order has actually reached the person.
+    def order_lines_for_pr(self, pr_number: str) -> list[Order]:
+        """Every line on one PR — the whole bulk order, in sheet order."""
+        return [o for o in self.orders.values() if o.order_id == pr_number]
+
+    @property
+    def pr_numbers(self) -> list[str]:
+        seen: dict[str, None] = {}
+        for order in self.orders.values():
+            seen.setdefault(order.order_id, None)
+        return list(seen)
+
+    def delivered_against(self, pr_number: str, employee_number: str, item_code: str) -> int:
+        """How much of one order line has actually reached the person.
 
         Summed from issuance rows rather than stored on the order, so a partial
-        delivery is never a number someone has to remember to update.
+        delivery is never a number someone has to remember to update. Scoped to
+        the person and item as well as the PR, because one PR number covers the
+        whole bulk order — summing on the PR alone would credit one person's
+        shirts against everybody else's.
         """
         total = 0
-        for rows in self.issuances.values():
-            for iss in rows:
-                if iss.order_id == order_id:
-                    total += iss.quantity
+        for iss in self.issuances.get(employee_number, ()):
+            if iss.order_id == pr_number and iss.item_code == item_code:
+                total += iss.quantity
         return total
 
     @property
@@ -252,17 +268,34 @@ class WorkbookStore:
         return len(issuances)
 
     def append_orders(self, orders: Sequence[Order]) -> int:
-        """Place orders: an intent to obtain, not yet a handover."""
+        """Raise order lines: an intent to obtain, not yet a handover."""
         with self._lock:
             for order in orders:
-                self._snapshot.orders[order.order_id] = order
+                key = (order.order_id, order.employee_number, order.item_code)
+                self._snapshot.orders[key] = order
                 self._pending.append(Append(schema.ORDERS_SHEET, _order_values(order)))
         self.request_flush()
         return len(orders)
 
     def update_by_key(self, sheet: str, key: dict[str, Any], values: dict[str, Any]) -> None:
-        """Queue an edit, locating the row by natural key at write time."""
+        """Queue an edit, locating the row by natural key at write time.
+
+        If the row is itself still queued as an append — an order measured before
+        the writer has caught up, which happens whenever two actions land in the
+        same few seconds — the edit is folded into that pending row instead. It
+        would otherwise be written against a row that is not on disk yet, and
+        fail looking for a sheet or a key that does not exist.
+        """
         with self._lock:
+            for op in self._pending:
+                if (
+                    isinstance(op, Append)
+                    and op.sheet == sheet
+                    and all(op.values.get(f) == v for f, v in key.items())
+                ):
+                    op.values.update(values)
+                    self.request_flush()
+                    return
             self._pending.append(Update(sheet, values, key=key))
         self.request_flush()
 
@@ -722,9 +755,13 @@ class WorkbookStore:
                     SheetProblem(schema.ORDERS_SHEET, number, "missing order id, staff id or item")
                 )
                 continue
-            if order_id in snap.orders:
+            key = (order_id, emp_no, code)
+            if key in snap.orders:
                 snap.problems.append(
-                    SheetProblem(schema.ORDERS_SHEET, number, f"duplicate order id {order_id}")
+                    SheetProblem(
+                        schema.ORDERS_SHEET, number,
+                        f"{order_id} already has a line for {emp_no} / {code} — row ignored",
+                    )
                 )
                 continue
             ordered = parse_date(cell(row, mapping, "ordered_date"), dayfirst=self.dayfirst)
@@ -736,12 +773,16 @@ class WorkbookStore:
                     )
                 )
                 continue
-            snap.orders[order_id] = Order(
+            snap.orders[key] = Order(
                 order_id=order_id,
                 employee_number=emp_no,
                 item_code=code,
                 ordered_date=ordered,
                 quantity=parse_int(cell(row, mapping, "quantity"), 1) or 1,
+                size=parse_text(cell(row, mapping, "size")),
+                measured_date=parse_date(
+                    cell(row, mapping, "measured_date"), dayfirst=self.dayfirst
+                ),
                 supplier_ref=parse_text(cell(row, mapping, "supplier_ref")),
                 notes=parse_text(cell(row, mapping, "notes")),
                 cancelled=parse_bool(cell(row, mapping, "cancelled"), False),

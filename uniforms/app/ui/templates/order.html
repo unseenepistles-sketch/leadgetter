@@ -1,0 +1,79 @@
+{% extends "base.html" %}{% from "_macros.html" import order_pill %}
+{% block body %}
+<div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+  <div><h1>{{ order.pr_number }}</h1>
+    <p class="sub">{{ order.people }} staff · {{ order.ordered }} item(s)
+      · {{ order.tailor or 'no tailor recorded' }}</p></div>
+  <span style="flex:1"></span>
+  {% if not order.measured %}
+  <form method="post" action="/orders/{{ order.pr_number }}/measurement"
+        style="display:flex;gap:6px;align-items:center">
+    <input type="date" name="measured_date" value="{{ today }}" max="{{ today }}"
+           aria-label="Date the tailor measured">
+    <button type="submit">Record measurement visit</button>
+  </form>
+  {% endif %}
+</div>
+
+{# The order's journey: raised, measured, delivered. Each leg is a date she has. #}
+<div class="track">
+  <div class="leg done"><div class="k">Order raised</div>
+    <div class="v">{{ order.raised.strftime('%d %b %Y') }}</div></div>
+  <div class="leg {{ 'done' if order.measured }}"><div class="k">Tailor measured</div>
+    <div class="v">{{ order.measured.strftime('%d %b %Y') if order.measured else 'not yet' }}</div></div>
+  <div class="leg {{ 'done' if order.first_delivery }}"><div class="k">First delivery</div>
+    <div class="v">{{ order.first_delivery.strftime('%d %b %Y') if order.first_delivery else '—' }}</div></div>
+  <div class="leg {{ 'done' if order.status.value == 'delivered' }}"><div class="k">Last delivery</div>
+    <div class="v">{% if order.status.value == 'delivered' %}{{ order.last_delivery.strftime('%d %b %Y') }}
+      {% else %}{{ order.outstanding }} outstanding{% endif %}</div></div>
+</div>
+
+{% if order.notes %}<p class="sub">{{ order.notes }}</p>{% endif %}
+
+<div class="panel scroll">
+  <div style="display:flex;align-items:baseline;gap:12px;padding:0 0 10px">
+    <h2 style="margin:0;font-size:16px">What was ordered</h2>
+    <span style="flex:1"></span>{{ order_pill(order.status.value) }}
+  </div>
+<table>
+  <thead><tr><th>ID number</th><th>Employee name</th><th>Item</th><th class="right">Ordered</th>
+    <th>Size</th><th class="right">Delivered</th><th class="right">Outstanding</th>
+    <th>Delivery dates</th><th></th></tr></thead>
+  <tbody>
+  {# Grouped by person, because the order sheet she works from reads that way. #}
+  {% for p in people %}
+    <tr class="grp">
+      <td><b>{{ p.employee_number }}</b></td>
+      <td><a href="/employees/{{ p.employee_number }}"><b>{{ p.name }}</b></a>
+        <div class="muted" style="font-size:12px">{{ p.role or 'no role' }}</div></td>
+      <td class="muted">{{ p.lines | length }} item(s)</td>
+      <td class="right"><b>{{ p.ordered }}</b></td>
+      <td></td>
+      <td class="right"><b>{{ p.delivered }}</b></td>
+      <td class="right"><b>{{ p.outstanding or '—' }}</b></td>
+      <td colspan="2"></td>
+    </tr>
+    {% for l in p.lines %}
+    <tr>
+      <td></td><td></td>
+      <td style="padding-left:22px">{{ l.item_name }}</td>
+      <td class="right">{{ l.order.quantity }}</td>
+      <td>{{ l.order.size or '—' }}</td>
+      <td class="right">{{ l.delivered }}</td>
+      <td class="right">{{ l.pending or '—' }}</td>
+      <td>{{ l.last_delivery.strftime('%d %b %Y') if l.last_delivery else '—' }}</td>
+      <td>{% if l.is_open and order.measured %}
+        <form method="post" style="display:flex;gap:6px"
+              action="/orders/{{ order.pr_number }}/{{ l.order.employee_number }}/{{ l.order.item_code }}/deliver">
+          <input type="number" name="quantity" value="{{ l.pending }}" min="1" max="{{ l.pending }}"
+                 style="width:62px" aria-label="Quantity received">
+          <button type="submit" class="ghost">Receive</button>
+        </form>
+      {% endif %}</td>
+    </tr>
+    {% endfor %}
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

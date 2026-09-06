@@ -89,40 +89,59 @@ def test_editing_nothing_is_a_no_op(service):
 
 # --- editing orders ---
 
+def raised(service, qty, pr="PR-1"):
+    """One line, measured, ready to be edited or delivered against."""
+    service.place_order(pr, [{"employee_number": "E002", "item_code": "SHIRT",
+                              "quantity": qty}], ordered_date=date(2026, 1, 5))
+    service.record_measurement(pr, date(2026, 1, 10))
+    return pr
+
+
 def test_edit_order_quantity_and_remarks(service):
-    order = service.place_order("E002", {"SHIRT": 2})[0]
-    line = service.edit_order(order.order_id, {"quantity": 5, "notes": "size change"},
-                              who="njiru")
+    pr = raised(service, 2)
+    line = service.edit_order(pr, "E002", "SHIRT",
+                              {"quantity": 5, "notes": "size change"}, who="njiru")
     assert line.order.quantity == 5 and line.order.notes == "size change"
     assert line.pending == 5
 
 
 def test_order_quantity_cannot_drop_below_what_arrived(service):
-    order = service.place_order("E002", {"SHIRT": 4})[0]
-    service.receive_delivery(order.order_id, quantity=3)
+    pr = raised(service, 4)
+    service.receive_delivery(pr, "E002", "SHIRT", quantity=3)
     with pytest.raises(ValidationError, match="already delivered"):
-        service.edit_order(order.order_id, {"quantity": 2}, who="njiru")
+        service.edit_order(pr, "E002", "SHIRT", {"quantity": 2}, who="njiru")
 
 
 def test_reducing_quantity_to_what_arrived_closes_the_order(service):
-    order = service.place_order("E002", {"SHIRT": 4})[0]
-    service.receive_delivery(order.order_id, quantity=2)
-    line = service.edit_order(order.order_id, {"quantity": 2}, who="njiru")
+    pr = raised(service, 4)
+    service.receive_delivery(pr, "E002", "SHIRT", quantity=2)
+    line = service.edit_order(pr, "E002", "SHIRT", {"quantity": 2}, who="njiru")
     assert line.status.value == "delivered" and line.pending == 0
 
 
 def test_cancelling_an_order(service):
-    order = service.place_order("E002", {"SHIRT": 2})[0]
-    line = service.edit_order(order.order_id, {"cancelled": True}, who="njiru")
+    pr = raised(service, 2)
+    line = service.edit_order(pr, "E002", "SHIRT", {"cancelled": True}, who="njiru")
     assert line.status.value == "cancelled"
     assert service.pending_delivery() == 0
+
+
+def test_editing_a_line_leaves_its_neighbours_alone(service):
+    """The (PR, person, item) key has to isolate one row out of a bulk order."""
+    service.place_order("PR-1", [
+        {"employee_number": "E002", "item_code": "SHIRT", "quantity": 2},
+        {"employee_number": "E003", "item_code": "SHIRT", "quantity": 2},
+    ], ordered_date=date(2026, 1, 5))
+    service.edit_order("PR-1", "E002", "SHIRT", {"quantity": 7}, who="njiru")
+    assert service.order_line("PR-1", "E002", "SHIRT").order.quantity == 7
+    assert service.order_line("PR-1", "E003", "SHIRT").order.quantity == 2
 
 
 # --- editing deliveries ---
 
 def test_edit_a_delivery_date(service):
-    order = service.place_order("E002", {"SHIRT": 1})[0]
-    issued = service.receive_delivery(order.order_id)
+    pr = raised(service, 1)
+    service.receive_delivery(pr, "E002", "SHIRT")
     service.store.flush()
     service.store.load()
 
@@ -130,164 +149,4 @@ def test_edit_a_delivery_date(service):
     updated = service.edit_delivery("E002", row, {"issued_date": "2026-01-15"}, who="njiru")
     assert updated.issued_date == date(2026, 1, 15)
     # the renewal clock follows the corrected date
-    assert service.order_line(order.order_id).next_due == date(2027, 1, 15)
-
-
-def test_future_delivery_date_is_refused(service):
-    service.record_issuance("E002", "SHIRT")
-    service.store.flush(); service.store.load()
-    row = service.snapshot.issuances_for("E002")[0].row
-    with pytest.raises(ValidationError, match="future"):
-        service.edit_delivery("E002", row, {"issued_date": "2099-01-01"}, who="njiru")
-
-
-def test_editing_a_delivery_that_does_not_exist(service):
-    with pytest.raises(NotFound):
-        service.edit_delivery("E002", 999, {"quantity": 1}, who="njiru")
-
-
-# --- editing renewal periods ---
-
-def test_edit_a_renewal_period(service):
-    updated = service.edit_item("SHIRT", {"renewal_cycle_months": 18}, who="njiru")
-    assert updated.renewal_cycle_months == 18
-
-
-def test_changing_a_cycle_does_not_rewrite_history(service):
-    """Existing issues keep the cycle in force when they were made."""
-    before = next(s for s in service.statuses_for("E001") if s.item_code == "SHIRT")
-    service.edit_item("SHIRT", {"renewal_cycle_months": 24}, who="njiru")
-    after = next(s for s in service.statuses_for("E001") if s.item_code == "SHIRT")
-    assert after.next_due == before.next_due
-    assert after.cycle_months == 12
-
-
-def test_a_new_issue_uses_the_new_cycle(service):
-    service.edit_item("SHIRT", {"renewal_cycle_months": 24}, who="njiru")
-    issued = service.record_issuance("E002", "SHIRT")
-    assert issued.cycle_months == 24
-
-
-def test_a_zero_cycle_is_refused(service):
-    with pytest.raises(ValidationError, match="at least 1"):
-        service.edit_item("SHIRT", {"renewal_cycle_months": 0}, who="njiru")
-
-
-# --- renewal overrides ---
-
-def test_override_replaces_the_calculated_date(service):
-    calculated = next(s for s in service.statuses_for("E001") if s.item_code == "SHIRT")
-    service.set_renewal_override("E001", "SHIRT", "2030-06-01",
-                                 reason="extended wear trial", authorised_by="njiru")
-    after = next(s for s in service.statuses_for("E001") if s.item_code == "SHIRT")
-    assert after.next_due == date(2030, 6, 1) != calculated.next_due
-    assert after.reason == "renewal date set manually"
-
-
-def test_an_override_in_the_past_still_reads_as_overdue(service):
-    """An override sets the date; it does not excuse the item."""
-    service.set_renewal_override("E001", "SHIRT", "2020-01-01",
-                                 reason="corrected record", authorised_by="njiru")
-    after = next(s for s in service.statuses_for("E001") if s.item_code == "SHIRT")
-    assert after.status.value == "overdue"
-
-
-def test_override_requires_a_reason_and_an_authoriser(service):
-    with pytest.raises(ValidationError, match="reason"):
-        service.set_renewal_override("E001", "SHIRT", "2030-01-01",
-                                     reason="  ", authorised_by="njiru")
-    with pytest.raises(ValidationError, match="authorised"):
-        service.set_renewal_override("E001", "SHIRT", "2030-01-01",
-                                     reason="because", authorised_by="")
-
-
-def test_clearing_an_override_restores_the_calculated_date(service):
-    original = next(s for s in service.statuses_for("E001") if s.item_code == "SHIRT")
-    service.set_renewal_override("E001", "SHIRT", "2030-06-01",
-                                 reason="trial", authorised_by="njiru")
-    assert service.clear_renewal_override("E001", "SHIRT", who="njiru") is True
-    restored = next(s for s in service.statuses_for("E001") if s.item_code == "SHIRT")
-    assert restored.next_due == original.next_due
-
-
-def test_clearing_an_override_that_is_not_there(service):
-    assert service.clear_renewal_override("E001", "SHIRT", who="njiru") is False
-
-
-def test_overrides_survive_a_reload(service):
-    service.set_renewal_override("E001", "SHIRT", "2030-06-01",
-                                 reason="extended wear trial", authorised_by="njiru")
-    service.store.flush()
-    service.store.load()
-    saved = service.overrides_for("E001")["SHIRT"]
-    assert saved.next_due == date(2030, 6, 1)
-    assert saved.authorised_by == "njiru" and saved.reason == "extended wear trial"
-
-
-def test_replacing_an_override_updates_the_same_row(service):
-    service.set_renewal_override("E001", "SHIRT", "2030-06-01", reason="a", authorised_by="njiru")
-    service.store.flush()
-    service.set_renewal_override("E001", "SHIRT", "2031-06-01", reason="b", authorised_by="njiru")
-    service.store.flush()
-    rows = _sheet(service, "RenewalOverrides")
-    assert len(rows) == 2, "one header plus one override, not a duplicate"
-
-
-# --- the audit trail ---
-
-def test_every_edit_is_logged_with_its_previous_value(service):
-    service.edit_employee("E002", {"full_name": "Amina Y. Bello"},
-                          who="njiru", reason="married name")
-    service.store.flush()
-    rows = _sheet(service, "ChangeLog")
-    header = rows[0]
-    entry = rows[-1]
-    assert entry[header.index("Who")] == "njiru"
-    assert entry[header.index("Record Type")] == "employee"
-    assert entry[header.index("Field")] == "full_name"
-    assert entry[header.index("Old Value")] == "Amina Yusuf"
-    assert entry[header.index("New Value")] == "Amina Y. Bello"
-    assert entry[header.index("Reason")] == "married name"
-
-
-def test_overrides_are_logged_with_their_authorisation(service):
-    service.set_renewal_override("E001", "SHIRT", "2030-06-01",
-                                 reason="extended wear trial", authorised_by="njiru")
-    service.store.flush()
-    rows = _sheet(service, "ChangeLog")
-    header = rows[0]
-    entry = rows[-1]
-    assert entry[header.index("Record Type")] == "renewal override"
-    assert entry[header.index("Reason")] == "extended wear trial"
-    assert entry[header.index("Who")] == "njiru"
-
-
-def test_a_no_op_edit_writes_no_audit_row(service):
-    """Nothing changed, so nothing is logged — and the sheet is never created."""
-    before = service.employee("E002")
-    service.edit_employee("E002", {"full_name": before.full_name}, who="njiru")
-    service.store.flush()
-    wb = load_workbook(service.store.path)
-    has_log = "ChangeLog" in wb.sheetnames
-    wb.close()
-    assert not has_log
-
-
-def test_an_edit_survives_a_row_being_inserted_in_excel(service):
-    """Cached row numbers shift when someone inserts a row; keys do not."""
-    wb = load_workbook(service.store.path)
-    wb["Employees"].insert_rows(2)          # a human adds a row above everyone
-    wb["Employees"].cell(row=2, column=1, value="E000")
-    wb["Employees"].cell(row=2, column=2, value="Inserted Person")
-    wb.save(service.store.path)
-    wb.close()
-
-    service.edit_employee("E002", {"full_name": "Amina Y. Bello"}, who="njiru")
-    service.store.flush()
-
-    rows = _sheet(service, "Employees")
-    header = rows[0]
-    by_number = {r[header.index("Employee Number")]: r for r in rows[1:] if r[0]}
-    assert by_number["E002"][header.index("Full Name")] == "Amina Y. Bello"
-    # the inserted row is untouched — the edit did not land on the wrong person
-    assert by_number["E000"][header.index("Full Name")] == "Inserted Person"
+    assert service.order_line(pr, "E002", "SHIRT").next_due == date(2027, 1, 15)

@@ -268,8 +268,9 @@ async def edit_item_submit(item_code: str, request: Request):
     return _back("/catalogue", ok=f"{item_code} updated. Existing issues keep their old cycle.")
 
 
-@router.post("/orders/{order_id}/edit")
-async def edit_order_submit(order_id: str, request: Request):
+@router.post("/orders/{pr_number}/{employee_number}/{item_code}/edit")
+async def edit_order_submit(pr_number: str, employee_number: str, item_code: str,
+                            request: Request):
     form = await request.form()
     fields = {}
     if form.get("quantity"):
@@ -281,11 +282,30 @@ async def edit_order_submit(order_id: str, request: Request):
     if form.get("cancelled"):
         fields["cancelled"] = True
     try:
-        get_service().edit_order(order_id, fields, who=_actor(request, form),
+        get_service().edit_order(pr_number, employee_number, item_code, fields,
+                                 who=_actor(request, form),
                                  reason=form.get("reason") or None)
     except (ValidationError, NotFound) as exc:
         return _back("/orders", err=str(exc))
-    return _back("/orders", ok=f"Order {order_id} updated.")
+    return _back("/orders", ok=f"{pr_number} updated.")
+
+
+@router.post("/orders/{pr_number}/measurement")
+async def record_measurement_submit(pr_number: str, request: Request):
+    """The tailor came and took sizes. One visit, one date, the whole PR."""
+    form = await request.form()
+    when = None
+    if form.get("measured_date"):
+        try:
+            when = date.fromisoformat(form["measured_date"])
+        except ValueError:
+            return _back("/orders", err=f"{form['measured_date']!r} is not a valid date")
+    try:
+        get_service().record_measurement(pr_number, when, who=_actor(request, form))
+    except (ValidationError, NotFound) as exc:
+        return _back("/orders", err=str(exc))
+    return _back("/orders", ok=f"Measurement visit recorded for {pr_number}. "
+                              "Now awaiting delivery.")
 
 
 @router.get("/issue")
@@ -341,17 +361,17 @@ ORDER_STATES = [("all", "All statuses")] + [(s.value, ORDER_LABELS[s]) for s in 
 
 
 @router.get("/orders")
-def orders(request: Request, status: str = "all", item: Optional[str] = None):
+def orders(request: Request, status: str = "all"):
+    """The order log, one row per PR — the level she works at."""
     service = get_service()
     try:
-        lines = service.order_lines(status=status, item_code=item)
+        rows = service.orders(status=status)
     except ValidationError:
-        status, lines = "all", service.order_lines(item_code=item)
+        status, rows = "all", service.orders()
     return _render(
         request, "orders.html", "orders",
-        lines=lines, status=status, item=item, statuses=ORDER_STATES,
-        items=[i for i in service.snapshot.items.values() if i.active],
-        pending=service.pending_delivery(),
+        orders=rows, status=status, statuses=ORDER_STATES,
+        pending=service.pending_delivery(), today=date.today().isoformat(),
     )
 
 
@@ -372,9 +392,13 @@ def new_order_form(request: Request, employee: Optional[str] = None):
 @router.post("/orders")
 async def create_order(request: Request):
     form = await request.form()
-    employee_number = (form.get("employee_number") or "").strip()
-    if not employee_number:
-        return _back("/orders/new", err="Choose a staff member first.")
+    if not (form.get("pr_number") or "").strip():
+        return _back("/orders/new", err="A PR number is required.")
+    # A bulk order covers many people under one PR, so the form posts a checkbox
+    # per person rather than a single staff picker.
+    employee_numbers = [v.strip() for v in form.getlist("employee_number") if v.strip()]
+    if not employee_numbers:
+        return _back("/orders/new", err="Tick at least one member of staff.")
 
     quantities = {}
     for key, value in form.items():
@@ -395,30 +419,71 @@ async def create_order(request: Request):
             return _back("/orders/new", err=f"{raw!r} is not a valid date")
 
     try:
-        created = get_service().place_order(
-            employee_number, quantities, ordered_date=when,
-            supplier_ref=form.get("supplier_ref") or None,
+        lines = [
+            {"employee_number": e, "item_code": code, "quantity": qty}
+            for e in employee_numbers
+            for code, qty in quantities.items()
+            if qty
+        ]
+        summary = get_service().place_order(
+            form.get("pr_number") or "", lines, ordered_date=when,
+            tailor=form.get("tailor") or None,
             notes=form.get("notes") or None,
         )
     except (ValidationError, NotFound) as exc:
         return _back("/orders/new", err=str(exc))
 
-    pieces = sum(o.quantity for o in created)
-    return _back("/orders", ok=f"Order placed: {pieces} piece(s) across {len(created)} item type(s).")
+    return _back(
+        "/orders",
+        ok=f"{summary.pr_number} raised — {summary.ordered} item(s) for {summary.people} staff. "
+           "Awaiting the tailor's measurement visit.",
+    )
 
 
-@router.post("/orders/{order_id}/deliver")
-async def deliver_order(order_id: str, request: Request):
+@router.post("/orders/{pr_number}/{employee_number}/{item_code}/deliver")
+async def deliver_order(pr_number: str, employee_number: str, item_code: str, request: Request):
     form = await request.form()
     try:
         qty = int(form.get("quantity") or 0) or None
     except ValueError:
         qty = None
     try:
-        get_service().receive_delivery(order_id, quantity=qty, received_by=form.get("received_by"))
+        get_service().receive_delivery(
+            pr_number, employee_number, item_code,
+            quantity=qty, received_by=form.get("received_by"),
+        )
     except (ValidationError, NotFound) as exc:
         return _back("/orders", err=str(exc))
     return _back("/orders", ok="Delivery booked in. The renewal clock starts from today.")
+
+
+@router.get("/orders/{pr_number}")
+def order_detail(request: Request, pr_number: str):
+    """One PR: its journey, and every line grouped by the person it is for."""
+    service = get_service()
+    try:
+        summary = service.order(pr_number)
+    except NotFound:
+        return _back("/orders", err=f"No order {pr_number}.")
+
+    grouped: dict[str, dict] = {}
+    for line in summary.lines:
+        person = grouped.setdefault(
+            line.order.employee_number,
+            {"employee_number": line.order.employee_number, "name": line.employee_name,
+             "role": line.role, "lines": [], "ordered": 0, "delivered": 0},
+        )
+        person["lines"].append(line)
+        person["ordered"] += line.order.quantity
+        person["delivered"] += line.delivered
+    for person in grouped.values():
+        person["outstanding"] = max(0, person["ordered"] - person["delivered"])
+
+    return _render(
+        request, "order.html", "orders",
+        order=summary, people=sorted(grouped.values(), key=lambda p: p["name"]),
+        today=date.today().isoformat(),
+    )
 
 
 @router.get("/reports")

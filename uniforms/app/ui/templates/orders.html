@@ -1,50 +1,42 @@
 {% extends "base.html" %}{% from "_macros.html" import order_pill %}
 {% block body %}
 <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
-  <div><h1>Orders log</h1>
-    <p class="sub">{{ lines | length }} order record(s) · {{ pending }} piece(s) still to arrive</p></div>
+  <div><h1>Orders</h1>
+    <p class="sub">{{ orders | length }} order(s) · {{ pending }} item(s) still to arrive</p></div>
   <span style="flex:1"></span>
-  <a href="/orders/new" style="text-decoration:none"><button type="button">New order</button></a>
+  <a href="/orders/new" style="text-decoration:none"><button type="button">Raise an order</button></a>
 </div>
 
 <form class="filters" method="get">
   <div><label>Status</label><select name="status">
     {% for value, text in statuses %}<option value="{{ value }}" {{ 'selected' if value == status }}>{{ text }}</option>{% endfor %}
   </select></div>
-  <div><label>Item</label><select name="item">
-    <option value="">All items</option>
-    {% for i in items %}<option value="{{ i.item_code }}" {{ 'selected' if i.item_code == item }}>{{ i.name }}</option>{% endfor %}
-  </select></div>
   <button type="submit">Filter</button>
 </form>
 
 <div class="panel scroll">
 <table>
-  <thead><tr><th>Staff</th><th>Role</th><th>Item</th><th>Ordered</th><th class="right">Qty</th>
-    <th class="right">Delivered</th><th class="right">Pending</th><th>Renewal due</th>
-    <th>Status</th><th></th></tr></thead>
+  <thead><tr><th>PR number</th><th>Raised</th><th>Measured</th><th>First delivery</th>
+    <th>Last delivery</th><th class="right">Staff</th><th class="right">Ordered</th>
+    <th class="right">Delivered</th><th class="right">Outstanding</th>
+    <th>Status</th><th>Tailor</th></tr></thead>
   <tbody>
-  {% for l in lines %}
+  {% for o in orders %}
     <tr>
-      <td><a href="/employees/{{ l.order.employee_number }}">{{ l.employee_name }}</a></td>
-      <td><span class="role">{{ l.role or '—' }}</span></td>
-      <td>{{ l.item_name }}</td>
-      <td>{{ l.order.ordered_date.strftime('%d %b %Y') }}</td>
-      <td class="right">{{ l.order.quantity }}</td>
-      <td class="right">{{ l.delivered }}</td>
-      <td class="right">{{ l.pending or '—' }}</td>
-      <td>{{ l.next_due.strftime('%d %b %Y') if l.next_due else '—' }}</td>
-      <td>{{ order_pill(l.status.value) }}</td>
-      <td>{% if l.is_open %}
-        <form method="post" action="/orders/{{ l.order.order_id }}/deliver" style="display:flex;gap:6px">
-          <input type="number" name="quantity" value="{{ l.pending }}" min="1" max="{{ l.pending }}"
-                 style="width:66px" aria-label="Quantity received">
-          <button type="submit" class="ghost">Receive</button>
-        </form>
-      {% endif %}</td>
+      <td><a href="/orders/{{ o.pr_number }}"><b>{{ o.pr_number }}</b></a></td>
+      <td>{{ o.raised.strftime('%d %b %Y') }}</td>
+      <td>{{ o.measured.strftime('%d %b %Y') if o.measured else '—' }}</td>
+      <td>{{ o.first_delivery.strftime('%d %b %Y') if o.first_delivery else '—' }}</td>
+      <td>{{ o.last_delivery.strftime('%d %b %Y') if o.last_delivery else '—' }}</td>
+      <td class="right">{{ o.people }}</td>
+      <td class="right">{{ o.ordered }}</td>
+      <td class="right">{{ o.delivered }}</td>
+      <td class="right">{{ o.outstanding or '—' }}</td>
+      <td>{{ order_pill(o.status.value) }}</td>
+      <td class="muted">{{ o.tailor or '—' }}</td>
     </tr>
   {% else %}
-    <tr><td colspan="10" class="muted">No orders match.</td></tr>
+    <tr><td colspan="11" class="muted">No orders match.</td></tr>
   {% endfor %}
   </tbody>
 </table>

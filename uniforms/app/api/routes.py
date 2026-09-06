@@ -12,7 +12,7 @@ from typing import Optional
 from fastapi import APIRouter, Body, HTTPException, Query, Request
 
 from ..deps import get_ledger, get_runner, get_service, get_store
-from ..domain.models import ORDER_LABELS, Employee, Issuance, ItemStatus, OrderLine, OrderStatus
+from ..domain.models import ORDER_LABELS, Employee, Issuance, ItemStatus, OrderLine, OrderStatus, OrderSummary
 from ..service import NotFound, ValidationError
 
 router = APIRouter(prefix="/api", tags=["api"])
@@ -65,9 +65,30 @@ def status_json(s: ItemStatus) -> dict:
     }
 
 
+def summary_json(s: OrderSummary) -> dict:
+    """A whole PR. The figures are rolled up from its lines, never stored."""
+    return {
+        "pr_number": s.pr_number,
+        "raised": s.raised.isoformat(),
+        "measured": s.measured.isoformat() if s.measured else None,
+        "tailor": s.tailor,
+        "notes": s.notes,
+        "status": s.status.value,
+        "status_label": ORDER_LABELS[s.status],
+        "people": s.people,
+        "ordered": s.ordered,
+        "delivered": s.delivered,
+        "outstanding": s.outstanding,
+        "first_delivery": s.first_delivery.isoformat() if s.first_delivery else None,
+        "last_delivery": s.last_delivery.isoformat() if s.last_delivery else None,
+        "lines": [order_json(l) for l in s.lines],
+    }
+
+
 def order_json(line: OrderLine) -> dict:
     o = line.order
     return {
+        "pr_number": o.order_id,
         "order_id": o.order_id,
         "employee_number": o.employee_number,
         "employee_name": line.employee_name,
@@ -80,6 +101,9 @@ def order_json(line: OrderLine) -> dict:
         "pending": line.pending,
         "status": line.status.value,
         "status_label": ORDER_LABELS[line.status],
+        "size": o.size,
+        "measured_date": o.measured_date.isoformat() if o.measured_date else None,
+        "tailor": o.supplier_ref,
         "supplier_ref": o.supplier_ref,
         "notes": o.notes,
         "last_delivery": line.last_delivery.isoformat() if line.last_delivery else None,
@@ -294,38 +318,44 @@ def list_orders(
     per_page: int = Query(50, ge=1, le=500),
 ) -> dict:
     try:
-        rows = get_service().order_lines(
-            status=status, item_code=item, employee_number=employee, open_only=open_only
-        )
+        rows = get_service().orders(status=status)
     except ValidationError as exc:
         raise HTTPException(400, str(exc)) from exc
+    if open_only:
+        rows = [r for r in rows if r.is_open]
+    if employee:
+        rows = [r for r in rows
+                if any(l.order.employee_number == employee for l in r.lines)]
+    if item:
+        rows = [r for r in rows if any(l.order.item_code == item for l in r.lines)]
     start = (page - 1) * per_page
     return {
-        "items": [order_json(r) for r in rows[start : start + per_page]],
+        "items": [summary_json(r) for r in rows[start : start + per_page]],
         "total": len(rows), "page": page, "per_page": per_page,
         "pages": max(1, -(-len(rows) // per_page)),
         "pending_pieces": get_service().pending_delivery(),
     }
 
 
-@router.get("/orders/{order_id}")
-def get_order(order_id: str) -> dict:
+@router.get("/orders/{pr_number}")
+def get_order(pr_number: str) -> dict:
+    """One PR: its dates, where it has got to, and every line on it."""
     try:
-        return order_json(get_service().order_line(order_id))
+        return summary_json(get_service().order(pr_number))
     except NotFound as exc:
         raise HTTPException(404, str(exc)) from exc
 
 
 @router.post("/orders", status_code=201)
 def create_order(payload: dict = Body(...)) -> dict:
-    """Place one order covering several items: 6 shirts and 3 trousers in one go."""
+    """Raise one order against a PR number. Lines may cover many people."""
     service = get_service()
     try:
-        created = service.place_order(
-            payload["employee_number"],
-            payload.get("quantities") or {},
+        summary = service.place_order(
+            payload["pr_number"],
+            payload.get("lines") or [],
             ordered_date=_date(payload.get("ordered_date")),
-            supplier_ref=payload.get("supplier_ref"),
+            tailor=payload.get("tailor"),
             notes=payload.get("notes"),
         )
     except KeyError as exc:
@@ -334,22 +364,38 @@ def create_order(payload: dict = Body(...)) -> dict:
         raise HTTPException(404, str(exc)) from exc
     except ValidationError as exc:
         raise HTTPException(400, str(exc)) from exc
-    return {
-        "created": len(created),
-        "orders": [order_json(service.order_line(o.order_id)) for o in created],
-    }
+    return {"created": len(summary.lines), "order": summary_json(summary)}
 
 
-@router.post("/orders/{order_id}/deliveries", status_code=201)
-def receive_delivery(order_id: str, payload: dict = Body(default={})) -> dict:
-    """Book in what arrived. This is the handover — it starts the renewal clock."""
+@router.post("/orders/{pr_number}/measurement", status_code=201)
+def record_measurement(pr_number: str, request: Request, payload: dict = Body(default={})) -> dict:
+    """The tailor's measurement visit. One date covers the whole PR."""
+    try:
+        summary = get_service().record_measurement(
+            pr_number,
+            _date(payload.get("measured_date")),
+            who=_actor(request, payload),
+        )
+    except NotFound as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return summary_json(summary)
+
+
+@router.post("/orders/{pr_number}/deliveries", status_code=201)
+def receive_delivery(pr_number: str, payload: dict = Body(default={})) -> dict:
+    """Book in what the tailor brought. This is the handover — it starts the clock.
+
+    ``parts`` is a list of ``{employee_number, item_code, quantity}``; one visit
+    normally covers many garments and several people.
+    """
     service = get_service()
     try:
-        issuance = service.receive_delivery(
-            order_id,
-            quantity=payload.get("quantity"),
+        issuances = service.receive_deliveries(
+            pr_number,
+            payload.get("parts") or [],
             received_date=_date(payload.get("received_date")),
-            size=payload.get("size"),
             received_by=payload.get("received_by"),
             notes=payload.get("notes"),
         )
@@ -357,7 +403,11 @@ def receive_delivery(order_id: str, payload: dict = Body(default={})) -> dict:
         raise HTTPException(404, str(exc)) from exc
     except ValidationError as exc:
         raise HTTPException(400, str(exc)) from exc
-    return {"issuance": issuance_json(issuance), "order": order_json(service.order_line(order_id))}
+    return {
+        "delivered": sum(i.quantity for i in issuances),
+        "issuances": [issuance_json(i) for i in issuances],
+        "order": summary_json(service.order(pr_number)),
+    }
 
 
 @router.get("/action-needed")
@@ -382,12 +432,15 @@ def edit_employee(employee_number: str, request: Request, payload: dict = Body(.
     return employee_json(updated)
 
 
-@router.patch("/orders/{order_id}")
-def edit_order(order_id: str, request: Request, payload: dict = Body(...)) -> dict:
+@router.patch("/orders/{pr_number}/{employee_number}/{item_code}")
+def edit_order(pr_number: str, employee_number: str, item_code: str,
+               request: Request, payload: dict = Body(...)) -> dict:
+    """Correct one line of one order. A PR alone does not identify a line."""
     fields = {k: v for k, v in payload.items() if k not in ("who", "reason")}
     try:
         line = get_service().edit_order(
-            order_id, fields, who=_actor(request, payload), reason=payload.get("reason")
+            pr_number, employee_number, item_code, fields,
+            who=_actor(request, payload), reason=payload.get("reason")
         )
     except NotFound as exc:
         raise HTTPException(404, str(exc)) from exc
@@ -396,15 +449,15 @@ def edit_order(order_id: str, request: Request, payload: dict = Body(...)) -> di
     return order_json(line)
 
 
-@router.get("/orders/{order_id}/deliveries")
-def order_deliveries(order_id: str) -> dict:
+@router.get("/orders/{pr_number}/deliveries")
+def order_deliveries(pr_number: str) -> dict:
     """Each part-delivery with its own date — what a partial order is made of."""
     service = get_service()
     try:
-        service.order_line(order_id)
+        service.order(pr_number)
     except NotFound as exc:
         raise HTTPException(404, str(exc)) from exc
-    return {"items": [issuance_json(i) for i in service.deliveries_for_order(order_id)]}
+    return {"items": [issuance_json(i) for i in service.deliveries_for_order(pr_number)]}
 
 
 @router.patch("/employees/{employee_number}/deliveries/{row}")

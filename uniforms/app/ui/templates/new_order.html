@@ -1,25 +1,23 @@
 {% extends "base.html" %}
 {% block body %}
-<h1>Log a new order</h1>
-<p class="sub">Set a quantity for each item you're ordering — 6 shirts and 3 trousers in one go.</p>
+<h1>Raise an order</h1>
+<p class="sub">Record the PR number, who the order covers and what was ordered. The measurement
+  and delivery dates are filled in later, when the tailor has been.</p>
 
 <form method="post" action="/orders" class="panel">
   <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px">
-    <div style="flex:1;min-width:260px">
-      <label>Staff member</label>
-      <select name="employee_number" required style="width:100%">
-        <option value="">Select a staff member…</option>
-        {% for e in employees %}
-        <option value="{{ e.employee_number }}" {{ 'selected' if e.employee_number == preselect }}>
-          {{ e.full_name }} — {{ e.role or 'no role' }}</option>
-        {% endfor %}
-      </select>
+    <div>
+      <label>PR number</label>
+      <input name="pr_number" required placeholder="PR-{{ today[:4] }}-" autocomplete="off">
     </div>
-    <div><label>Order date</label><input type="date" name="ordered_date" value="{{ today }}"></div>
-    <div><label>Supplier ref</label><input name="supplier_ref" placeholder="PO number (optional)"></div>
+    <div><label>Date raised</label><input type="date" name="ordered_date" value="{{ today }}"></div>
+    <div style="flex:1;min-width:200px">
+      <label>Tailor</label>
+      <input name="tailor" style="width:100%" placeholder="Who is making it (optional)">
+    </div>
   </div>
 
-  <label>Items &amp; quantities</label>
+  <label>Items &amp; quantity per person</label>
   <div class="qty-list">
     {% for item in items %}
     <div class="qty-row">
@@ -35,35 +33,59 @@
     {% endfor %}
   </div>
 
+  <div style="display:flex;align-items:baseline;gap:12px;margin-top:16px">
+    <label style="margin:0">Staff on this order</label>
+    <span style="flex:1"></span>
+    <button type="button" class="linkish" id="all">Select all</button>
+    <button type="button" class="linkish" id="none">Clear</button>
+  </div>
+  <div class="people">
+    {% for e in employees %}
+    <label>
+      <input type="checkbox" name="employee_number" value="{{ e.employee_number }}"
+             {{ 'checked' if e.employee_number == preselect }}>
+      {{ e.full_name }} <span class="muted">{{ e.employee_number }}</span>
+    </label>
+    {% endfor %}
+  </div>
+
   <div style="margin-top:14px">
-    <label>Notes (optional)</label>
-    <input name="notes" style="width:100%" placeholder="Sizes, supplier reference, or any other detail">
+    <label>Remarks (optional)</label>
+    <input name="notes" style="width:100%" placeholder="Anything worth noting about this order">
   </div>
 
   <div style="display:flex;gap:12px;align-items:center;margin-top:16px">
     <span class="muted" id="tally">Nothing selected yet</span>
     <span style="flex:1"></span>
     <a href="/orders" class="muted" style="text-decoration:none">Cancel</a>
-    <button type="submit">Save order</button>
+    <button type="submit">Raise order</button>
   </div>
 </form>
 
 <script>
 (function () {
   const rows = document.querySelectorAll(".qty-row");
+  const people = document.querySelectorAll(".people input");
   const tally = document.getElementById("tally");
+
   function refresh() {
-    let pieces = 0, types = 0;
+    let each = 0, types = 0;
     rows.forEach(row => {
       const input = row.querySelector("input");
       const n = Math.max(0, parseInt(input.value || "0", 10));
-      if (n > 0) { pieces += n; types++; }
+      if (n > 0) { each += n; types++; }
       row.classList.toggle("on", n > 0);
     });
-    tally.textContent = pieces
-      ? `${pieces} piece${pieces === 1 ? "" : "s"} across ${types} item type${types === 1 ? "" : "s"}`
+    const chosen = [...people].filter(p => p.checked).length;
+    // The quantities are per person, so the order's real size is the product —
+    // 18 items each across 35 staff is 630 garments, and she should see that
+    // before she submits it, not after.
+    tally.textContent = (each && chosen)
+      ? `${each * chosen} item${each * chosen === 1 ? "" : "s"} — ` +
+        `${each} each (${types} type${types === 1 ? "" : "s"}) across ${chosen} staff`
       : "Nothing selected yet";
   }
+
   rows.forEach(row => {
     const input = row.querySelector("input");
     row.querySelectorAll(".step").forEach(btn => btn.addEventListener("click", () => {
@@ -72,6 +94,11 @@
     }));
     input.addEventListener("input", refresh);
   });
+  people.forEach(p => p.addEventListener("change", refresh));
+  document.getElementById("all").addEventListener("click",
+    () => { people.forEach(p => p.checked = true); refresh(); });
+  document.getElementById("none").addEventListener("click",
+    () => { people.forEach(p => p.checked = false); refresh(); });
   refresh();
 })();
 </script>

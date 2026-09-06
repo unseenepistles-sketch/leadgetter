@@ -80,14 +80,24 @@ ISSUANCE_COLUMNS = (
 )
 
 ORDER_COLUMNS = (
-    Column("order_id", ("order id", "orderid", "order", "id", "reference", "ref"), required=True),
+    # The PR number is the order's identity: she is issued one per order and types it
+    # in, so there is no synthetic id to keep in step with the paperwork.
+    Column("order_id", ("pr number", "pr no", "pr", "purchase requisition", "requisition",
+                        "requisition number", "order id", "orderid", "order", "id",
+                        "reference", "ref"), required=True),
     Column("employee_number", ("employee number", "employee no", "staff id", "staff no",
                                "emp no", "employee id", "payroll number", "id"), required=True),
     Column("item_code", ("item code", "code", "item", "sku", "uniform item"), required=True),
-    Column("ordered_date", ("ordered date", "order date", "date ordered", "ordered", "date"),
-           required=True),
+    Column("ordered_date", ("ordered date", "order date", "date ordered", "date raised",
+                            "raised", "ordered", "date"), required=True),
     Column("quantity", ("quantity", "qty", "number", "count", "ordered qty")),
-    Column("supplier_ref", ("supplier ref", "supplier reference", "supplier", "po", "po number")),
+    Column("size", ("size", "ordered size", "fitting")),
+    # The tailor's measurement visit. One fact per order, repeated down its rows so the
+    # sheet reads correctly when she filters by PR number.
+    Column("measured_date", ("measured date", "measurement date", "date measured",
+                             "measured", "tailor measured", "fitting date", "measurement")),
+    Column("supplier_ref", ("tailor", "supplier ref", "supplier reference", "supplier",
+                            "po", "po number")),
     Column("notes", ("notes", "note", "remarks", "comment", "comments")),
     Column("cancelled", ("cancelled", "canceled", "void", "voided")),
 )
@@ -129,13 +139,13 @@ ISSUANCE_HEADERS = (
 )
 
 ORDER_WRITE_ORDER = (
-    "order_id", "employee_number", "item_code", "ordered_date", "quantity",
-    "supplier_ref", "cancelled", "notes",
+    "order_id", "employee_number", "item_code", "ordered_date", "quantity", "size",
+    "measured_date", "supplier_ref", "cancelled", "notes",
 )
 
 ORDER_HEADERS = (
-    "Order ID", "Employee Number", "Item Code", "Ordered Date", "Quantity",
-    "Supplier Ref", "Cancelled", "Notes",
+    "PR Number", "Employee Number", "Item Code", "Ordered Date", "Quantity", "Size",
+    "Measured Date", "Tailor", "Cancelled", "Notes",
 )
 
 OVERRIDE_WRITE_ORDER = (
